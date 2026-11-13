@@ -3,7 +3,7 @@
 SILO climate at a point, collated to daily, monthly and water-year tables in one
 Excel workbook, with rainfall metrics and plots.
 
-Not deployed yet. The citation in the app assumes https://hydropoint.streamlit.app/
+The citation in the app https://hydropoint.streamlit.app/
 (set by `APP_URL` near the top of `app.py`).
 
 Current version: 0.2.0 (set by `VERSION` in `hydropoint/__init__.py`).
