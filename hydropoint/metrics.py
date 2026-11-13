@@ -45,13 +45,13 @@ def is_rain_day(rain, threshold):
 
 
 def running_count(flag):
-    # number of days in a row, up to and including each day, that the flag is true
+    # running count of consecutive true days
     flag = flag.fillna(False).astype(int)
     return flag.groupby((flag == 0).cumsum()).cumsum()
 
 
 def spell_stats(flag, min_length):
-    # longest run of true values, and the number of runs at least min_length long
+    # longest run, and number of runs of min_length or more
     values = np.asarray(flag, dtype=bool).astype(int)
     edges = np.diff(np.concatenate(([0], values, [0])))
     lengths = np.where(edges == -1)[0] - np.where(edges == 1)[0]
@@ -105,12 +105,12 @@ def add_daily(daily, s):
 
 
 def collated_name(column):
-    # totals keep the daily name, means say so
+    # column name for the monthly and annual tables
     return column if COLLATE[column] == 'sum' else f'Mean {column[0].lower()}{column[1:]}'
 
 
 def collate_others(grouped, daily):
-    # the remaining SILO variables as a total or a mean, whichever suits
+    # totals or means of the other SILO variables
     columns = other_variables(daily)
     out = grouped[columns].agg({c: COLLATE[c] for c in columns}) if columns else pd.DataFrame()
     return out.rename(columns=collated_name)
@@ -139,8 +139,7 @@ def make_monthly(daily, s):
     out.insert(2, WY, water_year(first, s['wy_start_month']))
     out['Complete month'] = np.where(out['Days of data'] == first.dt.days_in_month, 'Yes', 'No')
 
-    # residual mass two ways: against the mean of all months, and against the mean
-    # for each calendar month (which takes the seasonal cycle out)
+    # residual mass against the all-month mean and the calendar-month mean
     ref = (out['Complete month'] == 'Yes') & out[WY].isin(reference_years(out[WY].unique(), s))
     complete = out['Complete month'] == 'Yes'
     overall = out.loc[ref, RAIN].mean()
@@ -241,6 +240,6 @@ def make_annual(daily, monthly, s):
         out[label] = (out[column] - ref_means[column]).where(inc)
         if column == RAIN:
             out['Rain anomaly (%)'] = 100 * out[label] / ref_means[column]
-    # residual mass over included years; years left out add nothing
+    # annual residual mass, included years only
     out['Rain residual mass (mm)'] = out['Rain anomaly (mm)'].fillna(0).cumsum().where(inc)
     return out, ref_means, wet_months

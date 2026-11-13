@@ -33,8 +33,7 @@ def bom_to_daily(table):
     rain = pd.to_numeric(table[_find(table.columns, 'rainfall')], errors='coerce')
     out = pd.DataFrame({'Date': dates, GAUGE: rain})
 
-    # a total measured over more than one day cannot be placed on a single day,
-    # so it is treated as a gap and filled from SILO
+    # multi-day totals are treated as gaps
     period_col = _find(table.columns, 'period')
     if period_col is not None:
         period = pd.to_numeric(table[period_col], errors='coerce')
@@ -55,7 +54,7 @@ def _tidy(out):
 
 
 def merge_gauge(daily, gauge, rain_column):
-    # gauge rain where it exists, SILO rain in the gaps. The SILO series is kept alongside
+    # gauge rain where available, otherwise SILO
     out = daily.merge(gauge, on='Date', how='left')
     out[SILO_RAIN] = out[rain_column]
     use_gauge = out[GAUGE].notna()

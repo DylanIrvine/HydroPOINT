@@ -1,4 +1,4 @@
-# figures. Plain text throughout: no bold, no italics
+# figures
 
 import calendar
 
@@ -36,8 +36,7 @@ def new_fig(width_cm=16, height_cm=9, rows=1):
 
 
 def add_watermark(fig):
-    # small grey line in its own strip just below the drawn area, bottom left,
-    # so it can be cropped off without touching the plot
+    # credit line below the plot, bottom left
     fig.canvas.draw()
     box = fig.get_tightbbox(fig.canvas.get_renderer())
     width, height = fig.get_size_inches()
@@ -54,20 +53,20 @@ def wy_label(start_month):
 
 
 def legend_above(ax, ncols=3):
-    # legend in the margin above the plot, clear of the data
+    # legend above the plot
     ax.legend(loc='lower left', bbox_to_anchor=(0, 1), ncols=ncols, borderaxespad=0.2,
               handlelength=1.5, columnspacing=1.2)
 
 
 def shade_reference(ax, s):
-    # light grey band over the reference period, when one has been set
+    # grey band over the reference period
     if s['ref_mode'] == 'period' and s['_ref_years']:
         ax.axvspan(min(s['_ref_years']) - 0.5, max(s['_ref_years']) + 0.5, color='0.9',
                    zorder=0, label='Reference period')
 
 
 def year_limits(ax, years):
-    # no empty space before the first bar or after the last
+    # trim the x-axis to the bars
     ax.set_xlim(min(years) - 0.6, max(years) + 0.6)
 
 
@@ -77,7 +76,7 @@ def wettest_driest(annual):
 
 
 def cumulative_rain(daily, annual, s, selected=None):
-    # one grey line per water year, with the wettest, driest and one chosen year picked out
+    # one line per water year. Wettest, driest and selected years highlighted
     start = s['wy_start_month']
     inc = annual.loc[annual['Included'] == 'Yes']
     d = daily.loc[daily[WY].isin(set(inc[WY])), ['Date', WY, RAIN]].copy()
@@ -99,7 +98,7 @@ def cumulative_rain(daily, annual, s, selected=None):
     if selected in wide.columns:
         ax.plot(wide.index, wide[selected], color='k', lw=1.6, label=str(selected))
 
-    # month ticks for a year that is not a leap year
+    # month ticks (non-leap year)
     ticks, labels, day = [], [], 0
     for i in range(12):
         month = (start - 1 + i) % 12 + 1
@@ -110,14 +109,13 @@ def cumulative_rain(daily, annual, s, selected=None):
     ax.set_xlim(0, 365)
     ax.set_ylim(bottom=0)
     ax.set_ylabel('Cumulative rain (mm)')
-    # the top left corner is always empty, so the legend goes inside and the
-    # axes can use the full width of the figure
+    # legend inside, top left
     ax.legend(loc='upper left')
     return fig
 
 
 def annual_totals(annual, column, ref_mean, ylabel, s, selected=None):
-    # grey bars, with the wettest, driest and chosen years picked out
+    # grey bars. Wettest, driest and selected years highlighted
     fig, ax = new_fig()
     inc = annual['Included'] == 'Yes'
     wettest, driest = wettest_driest(annual)

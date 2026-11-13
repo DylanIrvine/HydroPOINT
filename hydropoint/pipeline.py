@@ -1,4 +1,4 @@
-# ties the steps together so the app and the tests run the same code
+# runs the calculations in order and builds the settings table
 
 import datetime as dt
 
@@ -27,7 +27,7 @@ def run(silo_daily, settings, gauge=None):
 
 
 def settings_table(result, meta):
-    # everything needed to repeat the run, plus short definitions
+    # rows for the Settings sheet
     s = result['settings']
     annual = result['annual']
     daily = result['daily']

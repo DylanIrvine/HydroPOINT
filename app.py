@@ -18,7 +18,7 @@ from hydropoint.silo import RAIN
 # %% page setup
 
 APP_NAME = 'HydroPOINT'
-# change this if the app is deployed under a different address
+# app address, used in the citation
 APP_URL = 'https://hydropoint.streamlit.app/'
 
 LOGO = 'logo/hydrocpoint_badge.png'
@@ -40,10 +40,11 @@ with head_logo:
 st.markdown(
     'Enter a location and a date range to get the SILO climate record for that point as one Excel '
     'workbook, with Daily, Monthly and Annual sheets and a Settings sheet that records every choice '
-    'made. Annual values use a water year that starts in the month you choose. The start of the '
+    'made. Annual values use a water year that starts in the month you choose. This is helpful for'
+    'northern Australia, where the wet season spans two calendar years.\n\n The start of the '
     'record can be padded by up to 20 years, which suits the warm-up needed for time series models '
-    'of groundwater levels such as Pastas. A rain gauge file can be added, in which case the gauge '
-    'rain is used where it exists and SILO fills the gaps.\n\n'
+    'of groundwater levels such as Pastas (Collenteur et al., 2019). A rain gauge file can be added,'
+    'in which case the gauge rain is used where it exists and SILO fills the gaps.\n\n'
     'Note: HydroPOINT only works for locations in Australia.')
 
 if 'run_count' not in st.session_state:
@@ -220,8 +221,7 @@ if st.button('Run', type='primary', disabled=bool(problems)):
         start_str = download_start.strftime('%Y%m%d')
         end_str = end_date.strftime('%Y%m%d')
 
-        # only go back to SILO when the cell or the dates change, so thresholds
-        # can be adjusted and re-run without another download
+        # reuse the last download unless the cell or dates changed
         key = (cell_lat, cell_lon, start_str, end_str)
         if st.session_state.get('raw_key') != key:
             with st.spinner('Downloading from SILO...'):
@@ -258,7 +258,7 @@ FIGURES = {}
 
 
 def show(fig, name):
-    # one render at the chosen dpi: shown on the page, offered as a download, kept for the zip
+    # render once, show it, keep the png for the zip
     plots.add_watermark(fig)
     buffer = io.BytesIO()
     fig.savefig(buffer, format='png', dpi=FIGURE_DPI, bbox_inches='tight')

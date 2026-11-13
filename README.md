@@ -3,10 +3,9 @@
 SILO climate at a point, collated to daily, monthly and water-year tables in one
 Excel workbook, with rainfall metrics and plots.
 
-The citation in the app https://hydropoint.streamlit.app/
-(set by `APP_URL` near the top of `app.py`).
+Live app: https://hydropoint.streamlit.app/
 
-Current version: 0.2.1 (set by `VERSION` in `hydropoint/__init__.py`).
+Current version: 0.2.1
 
 It is the single-location sibling of HydroSILO (https://hydrosilo.streamlit.app/),
 which averages SILO climate over a catchment.
@@ -33,28 +32,28 @@ Only a new grid cell or date range does.
   wet-environment PET, rain totals over 3, 7, 14 and 30 days, the rain residual
   mass curve, a rain day flag, and running counts of consecutive rain days, dry
   days, days with Tmin below the threshold and days with Tmax above it.
-- **Monthly.** A total or a mean for every variable, whichever suits it, rain days, and the rain residual
-  mass against both the mean of all months and the mean for each calendar month.
-- **Annual.** One row per water year: a total or a mean for every variable, rain days, longest wet and dry
-  spells, number of rain spells, largest 1, 3, 7, 14 and 30-day rain, PCI,
+- **Monthly.** A total or a mean for every variable, rain days, and the rain
+  residual mass against both the mean of all months and the mean for each
+  calendar month.
+- **Annual.** One row per water year: a total or a mean for every variable,
+  rain days, longest wet and dry spells, number of rain spells, largest 1, 3, 7, 14 and 30-day rain, PCI,
   seasonality index, wet season share, temperature threshold counts and spells,
   anomalies from the reference mean, and the annual residual mass.
 - **Settings.** Every choice made in the run, plus short definitions, so a run
   can be repeated.
 
-## Choices worth knowing
+## Method notes
 
 - **Location.** SILO Data Drill is a 0.05 degree grid. The point is snapped to
   the centre of its grid cell, and both are written to the Settings sheet.
 - **Water year.** Named by the calendar year it starts in. With a September
   start, September 2000 to August 2001 is water year 2000.
 - **Excess water.** Daily rain less daily PET, set to zero where negative, then
-  summed. A sum of daily values is not the same as monthly rain less monthly PET.
+  summed.
 - **Rain day.** Rain at or above the threshold (1 mm by default). A threshold of
   0 counts any rain above zero.
 - **Spells.** Annual spell values count runs inside each water year only, so a
-  run that crosses the first day of the water year is split. Start the water
-  year in the dry season and this rarely matters.
+  run that crosses the first day of the water year is split.
 - **Included years.** A water year with fewer days of data than the minimum is
   flagged. Its totals are listed, but its indices, anomalies and residual mass
   are left blank, and it is left out of the reference means.
@@ -77,7 +76,7 @@ streamlit run app.py
 ## Repository layout
 
 ```
-hydropoint-app/
+HydroPOINT/
   app.py                    Streamlit front end
   hydropoint/
     silo.py                 Data Drill download and parser, grid snap, padding
@@ -87,7 +86,7 @@ hydropoint-app/
     plots.py                figures
     workbook.py             xlsx writer
     run_counter.py          shared run total (Upstash Redis over REST)
-  tests/                    non-network pytest suite
+  tests/                    pytest suite (no network needed)
   logo/                     header logo and browser-tab icon
   requirements.txt
   .streamlit/config.toml    dark theme
@@ -113,7 +112,7 @@ url = "https://<name>.upstash.io"
 token = "<REST token>"
 ```
 
-`.streamlit/secrets.toml` is in `.gitignore`. Never commit the token.
+`.streamlit/secrets.toml` is in `.gitignore`.
 
 ## Tests
 
@@ -121,9 +120,6 @@ token = "<REST token>"
 pip install pytest openpyxl
 pytest tests/
 ```
-
-The tests do not contact SILO. The download itself uses the same request and
-parser as HydroSILO.
 
 ## How to cite
 

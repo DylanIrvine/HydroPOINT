@@ -8,5 +8,5 @@ venv/
 # local outputs
 outputs/
 *.xlsx
-# never commit secrets (the run counter token lives here)
+# secrets
 .streamlit/secrets.toml

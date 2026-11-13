@@ -1,4 +1,4 @@
-# checks that need no network. Run with: pytest tests/
+# tests (no network needed). Run with: pytest tests/
 
 import io
 from pathlib import Path
@@ -77,7 +77,7 @@ def test_parse_silo_alldata():
     assert out[silo.PET_FAO].iloc[0] == 5.1
     assert out[silo.PET_MWET].iloc[0] == 6.2
     assert out['Date'].iloc[1] == pd.Timestamp('2020-01-02')
-    # every variable is kept and no source column gets through
+    # all variables kept, source columns dropped
     assert set(out.columns) == {'Date'} | set(silo.COLLATE)
     assert out['Sea level pressure (hPa)'].iloc[0] == 1010.5
     assert out['Solar radiation (MJ/m2)'].iloc[0] == 20.0
@@ -91,7 +91,7 @@ def test_daily_columns():
     assert np.allclose(d.loc[wet, metrics.EXCESS_FAO], d.loc[wet, silo.RAIN] - 5.0)
     assert d['Rain 7-day total (mm)'].iloc[6] == pytest.approx(d[silo.RAIN].iloc[:7].sum())
     assert np.isnan(d['Rain 7-day total (mm)'].iloc[5])
-    # the residual mass returns to zero at the end when the mean is from the whole record
+    # ends at zero when the mean is from the whole record
     assert d[metrics.RESIDUAL].iloc[-1] == pytest.approx(0, abs=1e-6)
 
 
@@ -130,7 +130,7 @@ def test_gauge_fill():
     r = pipeline.run(fake_silo(), dict(), g)
     d = r['daily'].set_index('Date')
     assert d.loc['1999-01-01', silo.RAIN] == 7.0 and d.loc['1999-01-01', 'Rain source'] == 'Gauge'
-    # a blank day and a two-day total both fall back to SILO
+    # blank days and multi-day totals use SILO
     for day in ('1999-01-02', '1999-01-03', '1999-01-05'):
         assert d.loc[day, 'Rain source'] == 'SILO'
         assert d.loc[day, silo.RAIN] == d.loc[day, gauge.SILO_RAIN]

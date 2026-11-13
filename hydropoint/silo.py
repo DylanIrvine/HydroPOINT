@@ -1,4 +1,4 @@
-# SILO Data Drill download for one grid cell. Same request and parser as HydroSILO
+# SILO Data Drill download for one grid cell
 
 import re
 import time
@@ -23,9 +23,8 @@ PET_MWET = 'Morton wet-environment areal PET (mm)'
 TMAX = 'Maximum temperature (degC)'
 TMIN = 'Minimum temperature (degC)'
 
-# every variable in the SILO 'alldata' format: short name, column name used here,
-# and how it is collated to months and years. The source (quality) columns such
-# as Smx and Srn are left out. The first five are needed; the rest are kept if present
+# SILO 'alldata' variables: short name, output column, monthly and annual collation.
+# source (quality) columns are not kept
 VARIABLES = [
     ('Rain', RAIN, 'sum'),
     ('FAO56', PET_FAO, 'sum'),
@@ -52,7 +51,7 @@ CORE = [RAIN, PET_FAO, PET_MWET, TMAX, TMIN]
 
 
 def other_variables(frame):
-    # the SILO variables in a table beyond the five core ones
+    # SILO variables other than the five core ones
     return [c for c in frame.columns if c in COLLATE and c not in CORE]
 
 
@@ -64,7 +63,7 @@ def snap_to_grid(latitude, longitude):
 
 
 def padded_start(start, pad_years):
-    # move the start back by pad_years, but not before the SILO record begins
+    # start date less pad_years, limited to the start of SILO
     start = pd.Timestamp(start)
     early = start - pd.DateOffset(years=int(pad_years))
     return max(early, SILO_FIRST_DAY)
