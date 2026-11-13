@@ -289,11 +289,12 @@ if 'result' in st.session_state:
                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                        type='primary', on_click='ignore')
 
-    st.subheader('Cumulative rain through the water year')
-    st.caption('The wettest year is blue and the driest is red, from the included years. '
-               'Choose one more year to show in black.')
     years = list(included[WY])
-    selected = st.selectbox('Year to show in black', years, index=len(years) - 1)
+    selected = st.selectbox('Year of interest (shown in black on the plots)', years,
+                            index=len(years) - 1)
+
+    st.subheader('Cumulative rain through the water year')
+    st.caption('The wettest year is blue and the driest is red, from the included years.')
     show(plots.cumulative_rain(daily, annual, s, selected), f'{prefix}_cumulative_rain')
 
     st.subheader('Annual rain')
@@ -302,10 +303,10 @@ if 'result' in st.session_state:
     else:
         st.caption('Anomalies are from the mean of the entire record. To use a reference period, '
                    'and have it shaded on the anomaly plots, set one in section 2 and run again.')
-    show(plots.annual_totals(annual, RAIN, r['ref_means'][RAIN], 'Rain (mm)',
-                             'Rain by water year', s), f'{prefix}_annual_rain')
-    show(plots.anomaly(annual, 'Rain anomaly (mm)', 'Rain anomaly (mm)',
-                       'Rain anomaly from the reference mean', s), f'{prefix}_rain_anomaly')
+    show(plots.annual_totals(annual, RAIN, r['ref_means'][RAIN], 'Rain (mm)', s, selected),
+         f'{prefix}_annual_rain')
+    show(plots.anomaly(annual, 'Rain anomaly (mm)', 'Rain anomaly (mm)', s, selected=selected),
+         f'{prefix}_rain_anomaly')
 
     st.subheader('Other annual anomalies')
     choices = {
@@ -318,8 +319,7 @@ if 'result' in st.session_state:
     }
     choice = st.selectbox('Variable', list(choices))
     column, up, down = choices[choice]
-    show(plots.anomaly(annual, column, column, f'{choice}: anomaly from the reference mean',
-                       s, up, down), f'{prefix}_anomaly_{column.split(" anomaly")[0].replace(" ", "_")}')
+    show(plots.anomaly(annual, column, column, s, up, down, selected), f'{prefix}_anomaly_{column.split(" anomaly")[0].replace(" ", "_")}')
 
     st.subheader('Rain residual mass')
     col_bars, col_curve = st.columns(2)
