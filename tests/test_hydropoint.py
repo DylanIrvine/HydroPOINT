@@ -193,3 +193,19 @@ def test_part_year_can_be_plotted():
     fig = plots.annual_totals(a, silo.RAIN, r['ref_means'][silo.RAIN], 'Rain (mm)', s, 2004)
     assert '2004 (part year)' in fig.axes[0].get_legend_handles_labels()[1]
     plt.close('all')
+
+
+def test_residual_mass_ignores_reference_period():
+    whole = pipeline.run(fake_silo(), dict(wy_start_month=9))
+    period = pipeline.run(fake_silo(), dict(wy_start_month=9, ref_mode='period', ref_start=2000, ref_end=2001))
+    for table, columns in [('daily', [metrics.RESIDUAL]),
+                           ('monthly', [metrics.MONTHLY_RESIDUAL, 'Rain residual mass, calendar-month mean (mm)']),
+                           ('annual', ['Rain residual mass (mm)'])]:
+        for column in columns:
+            pd.testing.assert_series_equal(whole[table][column], period[table][column])
+    d = period['daily']
+    assert np.allclose(d[metrics.RESIDUAL], (d[silo.RAIN] - d[silo.RAIN].mean()).cumsum())
+    a = period['annual'].dropna(subset=['Rain residual mass (mm)'])
+    assert a['Rain residual mass (mm)'].iloc[-1] == pytest.approx(0, abs=1e-6)
+    # anomalies still use the reference period
+    assert not np.allclose(whole['annual']['Rain anomaly (mm)'].dropna(), period['annual']['Rain anomaly (mm)'].dropna())

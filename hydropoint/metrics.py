@@ -91,9 +91,9 @@ def add_daily(daily, s):
     for n in RAIN_WINDOWS:
         out[f'Rain {n}-day total (mm)'] = out[RAIN].rolling(n, min_periods=n).sum()
 
-    # residual mass: running sum of the departure from the mean daily rain
-    in_ref = out[WY].isin(reference_years(out[WY].unique(), s))
-    mean_rain = out.loc[in_ref, RAIN].mean()
+    # residual mass: running sum of the departure from the mean daily rain.
+    # the mean is always from the whole record, not the reference period
+    mean_rain = out[RAIN].mean()
     out[RESIDUAL] = (out[RAIN] - mean_rain).fillna(0).cumsum()
 
     out['Rain day'] = is_rain_day(out[RAIN], s['rain_day_mm']).astype(int)
@@ -140,10 +140,9 @@ def make_monthly(daily, s):
     out['Complete month'] = np.where(out['Days of data'] == first.dt.days_in_month, 'Yes', 'No')
 
     # residual mass against the all-month mean and the calendar-month mean
-    ref = (out['Complete month'] == 'Yes') & out[WY].isin(reference_years(out[WY].unique(), s))
     complete = out['Complete month'] == 'Yes'
-    overall = out.loc[ref, RAIN].mean()
-    by_month = out.loc[ref].groupby('Month')[RAIN].mean()
+    overall = out.loc[complete, RAIN].mean()
+    by_month = out.loc[complete].groupby('Month')[RAIN].mean()
     out[MONTHLY_RESIDUAL] = (out[RAIN] - overall).where(complete, 0).cumsum()
     out['Rain residual mass, calendar-month mean (mm)'] = (
         (out[RAIN] - out['Month'].map(by_month)).where(complete, 0).fillna(0).cumsum())
@@ -240,6 +239,7 @@ def make_annual(daily, monthly, s):
         out[label] = (out[column] - ref_means[column]).where(inc)
         if column == RAIN:
             out['Rain anomaly (%)'] = 100 * out[label] / ref_means[column]
-    # annual residual mass, included years only
-    out['Rain residual mass (mm)'] = out['Rain anomaly (mm)'].fillna(0).cumsum().where(inc)
+    # annual residual mass, against the mean of all included years
+    departure = (out[RAIN] - out.loc[inc, RAIN].mean()).where(inc)
+    out['Rain residual mass (mm)'] = departure.fillna(0).cumsum().where(inc)
     return out, ref_means, wet_months

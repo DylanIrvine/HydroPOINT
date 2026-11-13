@@ -145,7 +145,7 @@ min_days = col_min.number_input('Minimum days for a water year to be included', 
 st.caption(f'Water years run from {wy_month_name} to {MONTHS[(wy_start_month - 2) % 12]} and are '
            'named by the calendar year they start in.')
 
-ref_choice = st.radio('Reference period for means, anomalies and the residual mass curves',
+ref_choice = st.radio('Reference period for means and anomalies',
                       ['Entire record', 'Set a period'], horizontal=True)
 ref_start = ref_end = None
 if ref_choice == 'Set a period':
@@ -334,6 +334,7 @@ if 'result' in st.session_state:
     show(plots.anomaly(annual, column, column, s, up, down, selected), f'{prefix}_anomaly_{column.split(" anomaly")[0].replace(" ", "_")}')
 
     st.subheader('Rain residual mass')
+    st.caption('Cumulative departure from the mean rain of the entire record.')
     col_bars, col_curve = st.columns(2)
     bars = col_bars.selectbox('Rain bars (left axis)', ['Monthly', 'Daily'])
     curve = col_curve.selectbox('Residual mass curve (right axis)', ['Monthly', 'Daily'])
