@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
+.pytest_cache/
+# local outputs
+outputs/
+*.xlsx
+# never commit secrets (the run counter token lives here)
+.streamlit/secrets.toml
