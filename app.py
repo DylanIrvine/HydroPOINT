@@ -40,10 +40,10 @@ with head_logo:
 st.markdown(
     'Enter a location and a date range to get the SILO climate record for that point as one Excel '
     'workbook, with Daily, Monthly and Annual sheets and a Settings sheet that records every choice '
-    'made. Annual values use a water year that starts in the month you choose. This is helpful for'
-    'northern Australia, where the wet season spans two calendar years.\n\n The start of the '
+    'made. Annual values use a water year that starts in the month you choose. This is helpful for '
+    'northern Australia, where the wet season spans two calendar years.\n\nThe start of the '
     'record can be padded by up to 20 years, which suits the warm-up needed for time series models '
-    'of groundwater levels such as Pastas (Collenteur et al., 2019). A rain gauge file can be added,'
+    'of groundwater levels such as Pastas (Collenteur et al., 2019). A rain gauge file can be added, '
     'in which case the gauge rain is used where it exists and SILO fills the gaps.\n\n'
     'Note: HydroPOINT only works for locations in Australia.')
 
@@ -89,6 +89,9 @@ with st.expander('**How to cite and references**'):
         'Environmental Modelling and Software 16(4), 309-330.\n\n'
         'Queensland Government (2026). SILO - Australian climate data from 1889 to yesterday. '
         'https://www.longpaddock.qld.gov.au/silo/\n\n'
+        'Pastas:\n\n'
+        'Collenteur, R.A., Bakker, M., Calje, R., Klop, S.A., and Schaars, F. (2019). Pastas: open '
+        'source software for the analysis of groundwater time series. Groundwater 57(6), 877-885.\n\n'
         'Indices:\n\n'
         'Oliver, J.E. (1980). Monthly precipitation distribution: a comparative index. '
         'The Professional Geographer 32(3), 300-309.\n\n'
@@ -157,14 +160,14 @@ col_a, col_b = st.columns(2)
 rain_day_mm = col_a.number_input('Rain day threshold (mm)', value=1.0, min_value=0.0, step=0.1,
                                  help='A rain day has at least this much rain. SILO and gauges '
                                       'both report rain below 1 mm. Use 0 to count any rain.')
-rain_spell_days = col_b.number_input('Rain spell: consecutive rain days', value=3, min_value=1, step=1)
+rain_spell_days = col_b.number_input('Rain spell: count events of n consecutive rain days', value=3, min_value=1, step=1)
 col_c, col_d = st.columns(2)
 tmin_threshold = col_c.number_input('Tmin below (degC)', value=5.0, step=0.5)
-tmin_spell_days = col_d.number_input('Cold spell: consecutive days with Tmin below the threshold',
+tmin_spell_days = col_d.number_input('Cold spell: consecutive days with Tmin < threshold',
                                      value=3, min_value=1, step=1)
 col_e, col_f = st.columns(2)
 tmax_threshold = col_e.number_input('Tmax above (degC)', value=35.0, step=0.5)
-tmax_spell_days = col_f.number_input('Hot spell: consecutive days with Tmax above the threshold',
+tmax_spell_days = col_f.number_input('Hot spell: consecutive days with Tmax > threshold',
                                      value=3, min_value=1, step=1)
 
 # %% 4. gauge file (optional)
@@ -289,9 +292,18 @@ if 'result' in st.session_state:
                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                        type='primary', on_click='ignore')
 
+    # included years, plus the latest year even if it is a part year
     years = list(included[WY])
+    latest = int(annual[WY].max())
+    part_year = latest not in years
+    if part_year:
+        years.append(latest)
     selected = st.selectbox('Year of interest (shown in black on the plots)', years,
-                            index=len(years) - 1)
+                            index=len(years) - 1,
+                            format_func=lambda y: f'{y} (part year)' if part_year and y == latest else str(y))
+    if part_year and selected == latest:
+        st.caption(f'{latest} has fewer days than the minimum, so it is plotted but left out of the '
+                   'means, the wettest and driest years, and the anomalies.')
 
     st.subheader('Cumulative rain through the water year')
     st.caption('The wettest year is blue and the driest is red, from the included years.')

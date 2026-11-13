@@ -5,7 +5,7 @@ Excel workbook, with rainfall metrics and plots.
 
 Live app: https://hydropoint.streamlit.app/
 
-Current version: 0.2.1
+Current version: 0.2.2
 
 It is the single-location sibling of HydroSILO (https://hydrosilo.streamlit.app/),
 which averages SILO climate over a catchment.
@@ -123,7 +123,7 @@ pytest tests/
 
 ## How to cite
 
-Irvine, D.J. (2026). HydroPOINT (version 0.2.1) [Web application]. Charles Darwin
+Irvine, D.J. (2026). HydroPOINT (version 0.2.2) [Web application]. Charles Darwin
 University. https://hydropoint.streamlit.app/
 
 Please also cite the SILO data:

@@ -70,7 +70,12 @@ def year_limits(ax, years):
     ax.set_xlim(min(years) - 0.6, max(years) + 0.6)
 
 
+def year_label(year, included):
+    return str(year) if year in included else f'{year} (part year)'
+
+
 def wettest_driest(annual):
+    # from included years only
     inc = annual.loc[annual['Included'] == 'Yes']
     return int(inc.loc[inc[RAIN].idxmax(), WY]), int(inc.loc[inc[RAIN].idxmin(), WY])
 
@@ -78,14 +83,15 @@ def wettest_driest(annual):
 def cumulative_rain(daily, annual, s, selected=None):
     # one line per water year. Wettest, driest and selected years highlighted
     start = s['wy_start_month']
-    inc = annual.loc[annual['Included'] == 'Yes']
-    d = daily.loc[daily[WY].isin(set(inc[WY])), ['Date', WY, RAIN]].copy()
+    included = set(annual.loc[annual['Included'] == 'Yes', WY])
+    # the selected year is drawn even if it is a part year
+    d = daily.loc[daily[WY].isin(included | {selected}), ['Date', WY, RAIN]].copy()
     d['doy'] = day_of_water_year(d['Date'], start)
     d['cum'] = d.groupby(WY)[RAIN].cumsum()
     wide = d.pivot(index='doy', columns=WY, values='cum')
 
     fig, ax = new_fig()
-    ax.plot(wide.index, wide.to_numpy(), color='0.8', lw=0.6)
+    ax.plot(wide.index, wide[sorted(included)].to_numpy(), color='0.8', lw=0.6)
     ax.plot([], [], color='0.8', lw=0.6, label='Each year')
 
     ref_years = [y for y in s['_ref_years'] if y in wide.columns]
@@ -96,7 +102,7 @@ def cumulative_rain(daily, annual, s, selected=None):
     ax.plot(wide.index, wide[wettest], color=BLUE, lw=1.6, label=f'Wettest ({wettest})')
     ax.plot(wide.index, wide[driest], color=RED, lw=1.6, label=f'Driest ({driest})')
     if selected in wide.columns:
-        ax.plot(wide.index, wide[selected], color='k', lw=1.6, label=str(selected))
+        ax.plot(wide.index, wide[selected], color='k', lw=1.6, label=year_label(selected, included))
 
     # month ticks (non-leap year)
     ticks, labels, day = [], [], 0
@@ -123,9 +129,10 @@ def annual_totals(annual, column, ref_mean, ylabel, s, selected=None):
     if (~inc).any():
         ax.bar(annual.loc[~inc, WY], annual.loc[~inc, column], color='0.88', width=0.8,
                label='Incomplete year')
+    included = set(annual.loc[inc, WY])
     for year, colour, label in [(wettest, BLUE, f'Wettest ({wettest})'), (driest, RED, f'Driest ({driest})'),
-                                (selected, 'k', str(selected))]:
-        row = annual.loc[inc & (annual[WY] == year)]
+                                (selected, 'k', year_label(selected, included))]:
+        row = annual.loc[annual[WY] == year]
         if len(row):
             ax.bar(row[WY], row[column], color=colour, width=0.8, label=label)
     ax.axhline(ref_mean, color='k', lw=1, ls='--', label=f'Reference mean ({ref_mean:.0f})')

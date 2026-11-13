@@ -178,3 +178,18 @@ def test_axis_label():
     from hydropoint import plots
     assert plots.wy_label(1) == 'Year'
     assert plots.wy_label(9) == 'Water year (Sep to Aug), named by the year it starts in'
+
+
+def test_part_year_can_be_plotted():
+    import matplotlib.pyplot as plt
+    from hydropoint import plots
+    r = pipeline.run(fake_silo(), dict(wy_start_month=9))
+    a, s = r['annual'], r['settings']
+    assert a.set_index(metrics.WY).loc[2004, 'Included'] == 'No'
+    # the part year is not the driest, even though it has the least rain
+    assert plots.wettest_driest(a)[1] != 2004
+    fig = plots.cumulative_rain(r['daily'], a, s, 2004)
+    assert '2004 (part year)' in fig.axes[0].get_legend_handles_labels()[1]
+    fig = plots.annual_totals(a, silo.RAIN, r['ref_means'][silo.RAIN], 'Rain (mm)', s, 2004)
+    assert '2004 (part year)' in fig.axes[0].get_legend_handles_labels()[1]
+    plt.close('all')
