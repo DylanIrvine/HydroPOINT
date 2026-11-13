@@ -21,14 +21,21 @@ APP_NAME = 'HydroPOINT'
 # change this if the app is deployed under a different address
 APP_URL = 'https://hydropoint.streamlit.app/'
 
-st.set_page_config(page_title=APP_NAME)
+LOGO = 'logo/hydrocpoint_badge.png'
+FAVICON = 'logo/hydropoint_favicon.png'
+
+st.set_page_config(page_title=APP_NAME, page_icon=FAVICON)
 
 # %% header
 
-st.title(APP_NAME)
-st.subheader('SILO climate at a point: daily, monthly and water-year summaries')
-st.write('Dylan Irvine, Charles Darwin University.')
-st.caption(f'Version {APP_VERSION}')
+head_text, head_logo = st.columns([3, 1], vertical_alignment='center')
+with head_text:
+    st.title(APP_NAME)
+    st.subheader('SILO climate at a point: daily, monthly and water-year summaries')
+    st.write('Dylan Irvine, Charles Darwin University.')
+    st.caption(f'Version {APP_VERSION}')
+with head_logo:
+    st.image(LOGO, width='stretch')
 
 st.markdown(
     'Enter a location and a date range to get the SILO climate record for that point as one Excel '

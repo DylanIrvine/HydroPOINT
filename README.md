@@ -87,6 +87,7 @@ hydropoint-app/
     workbook.py             xlsx writer
     run_counter.py          shared run total (Upstash Redis over REST)
   tests/                    non-network pytest suite
+  logo/                     header logo and browser-tab icon
   requirements.txt
   .streamlit/config.toml    dark theme
   LICENSE
