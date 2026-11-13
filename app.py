@@ -12,7 +12,7 @@ import streamlit as st
 
 from hydropoint import VERSION as APP_VERSION
 from hydropoint import gauge, pipeline, plots, run_counter, silo, workbook
-from hydropoint.metrics import MONTHS, WY, EXCESS_FAO
+from hydropoint.metrics import MONTHS, WY, EXCESS_FAO, EXCESS_MWET
 from hydropoint.silo import RAIN
 
 # %% page setup
@@ -290,11 +290,18 @@ if 'result' in st.session_state:
                        type='primary', on_click='ignore')
 
     st.subheader('Cumulative rain through the water year')
+    st.caption('The wettest year is blue and the driest is red, from the included years. '
+               'Choose one more year to show in black.')
     years = list(included[WY])
-    highlight = st.multiselect('Water years to highlight', years, default=years[-1:])
-    show(plots.cumulative_rain(daily, annual, s, highlight), f'{prefix}_cumulative_rain')
+    selected = st.selectbox('Year to show in black', years, index=len(years) - 1)
+    show(plots.cumulative_rain(daily, annual, s, selected), f'{prefix}_cumulative_rain')
 
     st.subheader('Annual rain')
+    if s['ref_mode'] == 'period':
+        st.caption('The grey band on the anomaly plots is the reference period set in section 2.')
+    else:
+        st.caption('Anomalies are from the mean of the entire record. To use a reference period, '
+                   'and have it shaded on the anomaly plots, set one in section 2 and run again.')
     show(plots.annual_totals(annual, RAIN, r['ref_means'][RAIN], 'Rain (mm)',
                              'Rain by water year', s), f'{prefix}_annual_rain')
     show(plots.anomaly(annual, 'Rain anomaly (mm)', 'Rain anomaly (mm)',
@@ -315,11 +322,18 @@ if 'result' in st.session_state:
                        s, up, down), f'{prefix}_anomaly_{column.split(" anomaly")[0].replace(" ", "_")}')
 
     st.subheader('Rain residual mass')
-    show(plots.residual_mass(daily, monthly), f'{prefix}_residual_mass')
+    col_bars, col_curve = st.columns(2)
+    bars = col_bars.selectbox('Rain bars (left axis)', ['Monthly', 'Daily'])
+    curve = col_curve.selectbox('Residual mass curve (right axis)', ['Monthly', 'Daily'])
+    show(plots.residual_mass(daily, monthly, bars, curve), f'{prefix}_residual_mass')
 
-    st.subheader('Monthly means and excess water')
+    st.subheader('Monthly means')
     show(plots.climatology(r['climatology']), f'{prefix}_monthly_means')
-    show(plots.excess_water(annual, s), f'{prefix}_excess_water')
+
+    st.subheader('Excess water')
+    pet_choice = st.selectbox('PET used for excess water', ['FAO56 PET', 'Morton wet-environment PET'])
+    excess_column = EXCESS_FAO if pet_choice == 'FAO56 PET' else EXCESS_MWET
+    show(plots.excess_water(annual, s, excess_column, pet_choice), f'{prefix}_excess_water')
 
     st.subheader('Annual table')
     st.dataframe(annual, width='stretch', hide_index=True)

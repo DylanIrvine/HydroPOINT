@@ -3,13 +3,14 @@
 import numpy as np
 import pandas as pd
 
-from .silo import RAIN, PET_FAO, PET_MWET, TMAX, TMIN
+from .silo import RAIN, PET_FAO, PET_MWET, TMAX, TMIN, COLLATE, other_variables
 
 WY = 'Water year'
 EXCESS_FAO = 'Excess water FAO56 (mm)'
 EXCESS_MWET = 'Excess water Morton (mm)'
 RAIN_WINDOWS = (3, 7, 14, 30)
 RESIDUAL = 'Rain residual mass (mm)'
+MONTHLY_RESIDUAL = 'Rain residual mass, all-month mean (mm)'
 MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 DEFAULTS = dict(
@@ -103,6 +104,18 @@ def add_daily(daily, s):
     return out, mean_rain
 
 
+def collated_name(column):
+    # totals keep the daily name, means say so
+    return column if COLLATE[column] == 'sum' else f'Mean {column[0].lower()}{column[1:]}'
+
+
+def collate_others(grouped, daily):
+    # the remaining SILO variables as a total or a mean, whichever suits
+    columns = other_variables(daily)
+    out = grouped[columns].agg({c: COLLATE[c] for c in columns}) if columns else pd.DataFrame()
+    return out.rename(columns=collated_name)
+
+
 # %% monthly
 
 def make_monthly(daily, s):
@@ -119,7 +132,8 @@ def make_monthly(daily, s):
         EXCESS_MWET: g[EXCESS_MWET].sum(),
         'Mean Tmax (degC)': g[TMAX].mean(),
         'Mean Tmin (degC)': g[TMIN].mean(),
-    }).reset_index()
+    })
+    out = pd.concat([out, collate_others(g, daily)], axis=1).reset_index()
 
     first = pd.to_datetime(dict(year=out['Year'], month=out['Month'], day=1))
     out.insert(2, WY, water_year(first, s['wy_start_month']))
@@ -131,7 +145,7 @@ def make_monthly(daily, s):
     complete = out['Complete month'] == 'Yes'
     overall = out.loc[ref, RAIN].mean()
     by_month = out.loc[ref].groupby('Month')[RAIN].mean()
-    out['Rain residual mass, all-month mean (mm)'] = (out[RAIN] - overall).where(complete, 0).cumsum()
+    out[MONTHLY_RESIDUAL] = (out[RAIN] - overall).where(complete, 0).cumsum()
     out['Rain residual mass, calendar-month mean (mm)'] = (
         (out[RAIN] - out['Month'].map(by_month)).where(complete, 0).fillna(0).cumsum())
     return out
@@ -207,6 +221,8 @@ def make_annual(daily, monthly, s):
         })
         rows.append(row)
     out = pd.DataFrame(rows)
+    others = collate_others(daily.groupby(WY), daily)
+    out = out.merge(others, left_on=WY, right_index=True, how='left')
 
     # anomalies against the reference period, using included years only
     inc = out['Included'] == 'Yes'

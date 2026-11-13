@@ -6,7 +6,7 @@ Excel workbook, with rainfall metrics and plots.
 Not deployed yet. The citation in the app assumes https://hydropoint.streamlit.app/
 (set by `APP_URL` near the top of `app.py`).
 
-Current version: 0.1.0 (set by `VERSION` in `hydropoint/__init__.py`).
+Current version: 0.2.0 (set by `VERSION` in `hydropoint/__init__.py`).
 
 It is the single-location sibling of HydroSILO (https://hydrosilo.streamlit.app/),
 which averages SILO climate over a catchment.
@@ -28,13 +28,14 @@ Only a new grid cell or date range does.
 
 ## What the workbook holds
 
-- **Daily.** The SILO variables, excess water against FAO56 and against Morton
+- **Daily.** Every variable in the SILO 'alldata' format (the source or quality
+  columns are left out), excess water against FAO56 and against Morton
   wet-environment PET, rain totals over 3, 7, 14 and 30 days, the rain residual
   mass curve, a rain day flag, and running counts of consecutive rain days, dry
   days, days with Tmin below the threshold and days with Tmax above it.
-- **Monthly.** Totals and means for each month, rain days, and the rain residual
+- **Monthly.** A total or a mean for every variable, whichever suits it, rain days, and the rain residual
   mass against both the mean of all months and the mean for each calendar month.
-- **Annual.** One row per water year: totals, rain days, longest wet and dry
+- **Annual.** One row per water year: a total or a mean for every variable, rain days, longest wet and dry
   spells, number of rain spells, largest 1, 3, 7, 14 and 30-day rain, PCI,
   seasonality index, wet season share, temperature threshold counts and spells,
   anomalies from the reference mean, and the annual residual mass.
@@ -126,7 +127,7 @@ parser as HydroSILO.
 
 ## How to cite
 
-Irvine, D.J. (2026). HydroPOINT (version 0.1.0) [Web application]. Charles Darwin
+Irvine, D.J. (2026). HydroPOINT (version 0.2.0) [Web application]. Charles Darwin
 University. https://hydropoint.streamlit.app/
 
 Please also cite the SILO data:

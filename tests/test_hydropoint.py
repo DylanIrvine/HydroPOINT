@@ -22,8 +22,9 @@ def fake_silo(start='1999-01-01', end='2004-12-31', seed=0):
     out[silo.PET_MWET] = 6.0
     out[silo.TMAX] = 30 + rng.normal(0, 3, len(dates))
     out[silo.TMIN] = 15 + rng.normal(0, 3, len(dates))
-    for name in list(silo.SILO_COLUMNS.values())[5:]:
-        out[name] = 1.0
+    for name in silo.COLLATE:
+        if name not in out:
+            out[name] = 1.0
     return out
 
 
@@ -64,8 +65,10 @@ def test_grid_snap_and_padding():
 
 def test_parse_silo_alldata():
     names = ['Date', 'Day', 'Date2', 'T.Max', 'Smx', 'T.Min', 'Smn', 'Rain', 'Srn', 'Evap', 'Sev',
-             'Radn', 'Ssl', 'VP', 'Svp', 'RHmaxT', 'RHminT', 'FAO56', 'Mlake', 'Mpot', 'Mact', 'Mwet', 'Span']
-    row = '{d} {n} 01-01-2020 33.0 25 24.5 25 12.4 25 6.0 25 20.0 25 30.0 25 60.0 90.0 5.1 6 7 4 6.2 6.5'
+             'Radn', 'Ssl', 'VP', 'Svp', 'RHmaxT', 'RHminT', 'FAO56', 'Mlake', 'Mpot', 'Mact', 'Mwet', 'Span',
+             'Ssp', 'EvSp', 'Ses', 'MSLPres', 'Sp']
+    row = ('{d} {n} 01-01-2020 33.0 25 24.5 25 12.4 25 6.0 25 20.0 25 30.0 25 60.0 90.0 5.1 6 7 4 6.2 6.5 '
+           '26 6.1 25 1010.5 25')
     text = '\n'.join(['"some header text"', ' '.join(names), ' '.join(['(units)'] * len(names)),
                       row.format(d=20200101, n=1), row.format(d=20200102, n=2)])
     out = silo.parse_silo_alldata(text.encode())
@@ -74,6 +77,10 @@ def test_parse_silo_alldata():
     assert out[silo.PET_FAO].iloc[0] == 5.1
     assert out[silo.PET_MWET].iloc[0] == 6.2
     assert out['Date'].iloc[1] == pd.Timestamp('2020-01-02')
+    # every variable is kept and no source column gets through
+    assert set(out.columns) == {'Date'} | set(silo.COLLATE)
+    assert out['Sea level pressure (hPa)'].iloc[0] == 1010.5
+    assert out['Solar radiation (MJ/m2)'].iloc[0] == 20.0
 
 
 def test_daily_columns():
@@ -155,3 +162,19 @@ def test_results_section_renders():
     at.run()
     assert not at.exception
     assert any(h.value == '6. Results' for h in at.header)
+
+
+def test_all_variables_collated():
+    r = pipeline.run(fake_silo(), dict(wy_start_month=9))
+    m, a = r['monthly'], r['annual'].set_index(metrics.WY)
+    # a total for fluxes, a mean for states
+    assert a.loc[2000, 'Pan evaporation (mm)'] == pytest.approx(365)
+    assert a.loc[2000, 'Mean solar radiation (MJ/m2)'] == pytest.approx(1)
+    assert m['Morton actual evapotranspiration (mm)'].iloc[0] == pytest.approx(31)
+    assert 'Mean vapour pressure (hPa)' in m
+
+
+def test_axis_label():
+    from hydropoint import plots
+    assert plots.wy_label(1) == 'Year'
+    assert plots.wy_label(9) == 'Water year (Sep to Aug), named by the year it starts in'

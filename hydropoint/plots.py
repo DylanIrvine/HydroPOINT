@@ -8,8 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 import numpy as np
 
-from .metrics import (WY, MONTHS, RESIDUAL, EXCESS_FAO, EXCESS_MWET,
-                      day_of_water_year)
+from .metrics import WY, MONTHS, RESIDUAL, MONTHLY_RESIDUAL, day_of_water_year
 from .silo import RAIN, PET_FAO, PET_MWET
 
 YELLOW, ORANGE, RED, PURPLE, BLUE, GREEN, GREY = (
@@ -48,29 +47,48 @@ def add_watermark(fig):
 
 
 def wy_label(start_month):
+    if start_month == 1:
+        return 'Year'
     last = MONTHS[(start_month - 2) % 12]
-    return f'Water year ({MONTHS[start_month - 1]} to {last}), named by the year it starts'
+    return f'Water year ({MONTHS[start_month - 1]} to {last}), named by the year it starts in'
 
 
-def cumulative_rain(daily, annual, s, highlight):
-    # one line per water year, with the reference-period mean and chosen years picked out
+def legend_above(ax, ncols=3):
+    # legend in the top right margin, clear of the data. Titles sit on the left
+    ax.legend(loc='lower right', bbox_to_anchor=(1, 1), ncols=ncols, borderaxespad=0.2,
+              handlelength=1.5, columnspacing=1.2)
+
+
+def shade_reference(ax, s):
+    # light grey band over the reference period, when one has been set
+    if s['ref_mode'] == 'period' and s['_ref_years']:
+        ax.axvspan(min(s['_ref_years']) - 0.5, max(s['_ref_years']) + 0.5, color='0.9',
+                   zorder=0, label='Reference period')
+
+
+def cumulative_rain(daily, annual, s, selected=None):
+    # one grey line per water year, with the wettest, driest and one chosen year picked out
     start = s['wy_start_month']
-    included = set(annual.loc[annual['Included'] == 'Yes', WY])
-    d = daily.loc[daily[WY].isin(included), ['Date', WY, RAIN]].copy()
+    inc = annual.loc[annual['Included'] == 'Yes']
+    d = daily.loc[daily[WY].isin(set(inc[WY])), ['Date', WY, RAIN]].copy()
     d['doy'] = day_of_water_year(d['Date'], start)
     d['cum'] = d.groupby(WY)[RAIN].cumsum()
     wide = d.pivot(index='doy', columns=WY, values='cum')
 
     fig, ax = new_fig(16, 10)
     ax.plot(wide.index, wide.to_numpy(), color='0.8', lw=0.6)
-    ax.plot([], [], color='0.8', lw=0.6, label='Each water year')
+    ax.plot([], [], color='0.8', lw=0.6, label='Each year')
 
     ref_years = [y for y in s['_ref_years'] if y in wide.columns]
     mean = wide[ref_years].iloc[:365].mean(axis=1)
-    ax.plot(mean.index, mean, color='k', lw=1.6, label='Reference mean')
+    ax.plot(mean.index, mean, color=GREY, lw=1.4, ls='--', label='Reference mean')
 
-    for i, year in enumerate(y for y in highlight if y in wide.columns):
-        ax.plot(wide.index, wide[year], color=HIGHLIGHT[i % len(HIGHLIGHT)], lw=1.6, label=str(year))
+    wettest = int(inc.loc[inc[RAIN].idxmax(), WY])
+    driest = int(inc.loc[inc[RAIN].idxmin(), WY])
+    ax.plot(wide.index, wide[wettest], color=BLUE, lw=1.6, label=f'Wettest ({wettest})')
+    ax.plot(wide.index, wide[driest], color=RED, lw=1.6, label=f'Driest ({driest})')
+    if selected in wide.columns:
+        ax.plot(wide.index, wide[selected], color='k', lw=1.6, label=str(selected))
 
     # month ticks for a year that is not a leap year
     ticks, labels, day = [], [], 0
@@ -83,8 +101,9 @@ def cumulative_rain(daily, annual, s, highlight):
     ax.set_xlim(0, 366)
     ax.set_ylim(bottom=0)
     ax.set_ylabel('Cumulative rain (mm)')
-    ax.set_title('Cumulative rain through the water year')
-    ax.legend(loc='upper left')
+    # five entries need the full width, so this plot has no title
+    ax.legend(loc='lower left', bbox_to_anchor=(0, 1), ncols=5, borderaxespad=0.2,
+              handlelength=1.5, columnspacing=1.2)
     return fig
 
 
@@ -98,37 +117,47 @@ def annual_totals(annual, column, ref_mean, ylabel, title, s, colour=BLUE):
     ax.axhline(ref_mean, color='k', lw=1, ls='--', label=f'Reference mean ({ref_mean:.0f})')
     ax.set_ylabel(ylabel)
     ax.set_xlabel(wy_label(s['wy_start_month']))
-    ax.set_title(title)
-    ax.legend(loc='upper left', ncols=2)
+    ax.set_title(title, loc='left')
+    legend_above(ax)
     return fig
 
 
 def anomaly(annual, column, ylabel, title, s, up=BLUE, down=RED):
     fig, ax = new_fig()
     a = annual.dropna(subset=[column])
+    shade_reference(ax, s)
     ax.bar(a[WY], a[column], color=np.where(a[column] >= 0, up, down), width=0.8)
     ax.axhline(0, color='k', lw=0.8)
     ax.set_ylabel(ylabel)
     ax.set_xlabel(wy_label(s['wy_start_month']))
-    ax.set_title(title)
+    ax.set_title(title, loc='left')
+    if ax.get_legend_handles_labels()[0]:
+        legend_above(ax)
     return fig
 
 
-def residual_mass(daily, monthly):
-    fig, axes = new_fig(16, 12, rows=2)
-    axes[0].plot(daily['Date'], daily[RESIDUAL], color=BLUE, lw=0.8)
-    axes[0].set_title('Rain residual mass, daily')
+def residual_mass(daily, monthly, bars='Monthly', curve='Monthly'):
+    # rain as bars on the left axis, the residual mass curve on the right axis
     month_dates = np.array([np.datetime64(f'{y}-{m:02d}-15') for y, m in zip(monthly['Year'], monthly['Month'])])
-    axes[1].plot(month_dates, monthly['Rain residual mass, all-month mean (mm)'],
-                 color=BLUE, lw=0.8, label='Against the mean of all months')
-    axes[1].plot(month_dates, monthly['Rain residual mass, calendar-month mean (mm)'],
-                 color=ORANGE, lw=0.8, label='Against the mean for each calendar month')
-    axes[1].set_title('Rain residual mass, monthly')
-    axes[1].legend(loc='upper center', bbox_to_anchor=(0.5, -0.18), ncols=2)
-    for ax in axes:
-        ax.axhline(0, color='k', lw=0.6)
-        ax.set_ylabel('Residual mass (mm)')
-    fig.tight_layout()
+    fig, ax = new_fig()
+    if bars == 'Monthly':
+        ax.bar(month_dates, monthly[RAIN], width=np.timedelta64(25, 'D'), color=BLUE, label='Monthly rain')
+    else:
+        wet = daily[RAIN] > 0
+        ax.vlines(daily.loc[wet, 'Date'], 0, daily.loc[wet, RAIN], color=BLUE, lw=0.5, label='Daily rain')
+    ax.set_ylabel(f'{bars} rain (mm)')
+    ax.set_ylim(bottom=0)
+
+    right = ax.twinx()
+    right.spines['right'].set_visible(True)
+    if curve == 'Monthly':
+        right.plot(month_dates, monthly[MONTHLY_RESIDUAL], color='k', lw=1)
+    else:
+        right.plot(daily['Date'], daily[RESIDUAL], color='k', lw=1)
+    right.set_ylabel(f'Residual mass, {curve.lower()} (mm)')
+    ax.plot([], [], color='k', lw=1, label=f'Residual mass ({curve.lower()})')
+    ax.set_title('Rain and rain residual mass', loc='left')
+    legend_above(ax)
     return fig
 
 
@@ -140,18 +169,19 @@ def climatology(clim):
     ax.plot(x, clim[PET_MWET], color=RED, marker='s', ms=3, lw=1.2, label='Morton wet-environment PET')
     ax.set_xticks(x, [MONTHS[m - 1] for m in clim.index])
     ax.set_ylabel('Mean monthly total (mm)')
-    ax.set_title('Mean monthly rain and PET over the reference period')
-    ax.legend(loc='best')
+    ax.set_title('Monthly means', loc='left')
+    legend_above(ax)
     return fig
 
 
-def excess_water(annual, s):
+def excess_water(annual, s, column, pet_name):
     fig, ax = new_fig()
     a = annual.loc[annual['Included'] == 'Yes']
-    ax.bar(a[WY] - 0.2, a[EXCESS_FAO], width=0.4, color=BLUE, label='Rain less FAO56 PET')
-    ax.bar(a[WY] + 0.2, a[EXCESS_MWET], width=0.4, color=ORANGE, label='Rain less Morton PET')
+    shade_reference(ax, s)
+    ax.bar(a[WY], a[column], width=0.8, color=BLUE)
     ax.set_ylabel('Excess water (mm)')
     ax.set_xlabel(wy_label(s['wy_start_month']))
-    ax.set_title('Excess water by water year (sum of daily rain less PET, where positive)')
-    ax.legend(loc='upper left')
+    ax.set_title(f'Excess water, {pet_name}', loc='left')
+    if ax.get_legend_handles_labels()[0]:
+        legend_above(ax)
     return fig
