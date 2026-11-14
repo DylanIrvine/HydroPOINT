@@ -11,7 +11,7 @@ import pandas as pd
 import streamlit as st
 
 from hydropoint import VERSION as APP_VERSION
-from hydropoint import gauge, pipeline, plots, run_counter, silo, workbook
+from hydropoint import gauge, pipeline, plots, run_counter, silo, smooth, workbook
 from hydropoint.metrics import MONTHS, WY, EXCESS_FAO, EXCESS_MWET
 from hydropoint.silo import RAIN
 
@@ -96,7 +96,14 @@ with st.expander('**How to cite and references**'):
         'Oliver, J.E. (1980). Monthly precipitation distribution: a comparative index. '
         'The Professional Geographer 32(3), 300-309.\n\n'
         'Walsh, R.P.D., and Lawler, D.M. (1981). Rainfall seasonality: description, spatial '
-        'patterns and change through time. Weather 36(7), 201-208.')
+        'patterns and change through time. Weather 36(7), 201-208.\n\n'
+        'Methods:\n\n'
+        'Allen, R.G., Pereira, L.S., Raes, D., and Smith, M. (1998). Crop evapotranspiration: '
+        'guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56. FAO, Rome.\n\n'
+        'Cleveland, W.S. (1979). Robust locally weighted regression and smoothing scatterplots. '
+        'Journal of the American Statistical Association 74(368), 829-836.\n\n'
+        'Stull, R. (2011). Wet-bulb temperature from relative humidity and air temperature. '
+        'Journal of Applied Meteorology and Climatology 50(11), 2267-2269.')
 
 # %% 1. location and dates
 
@@ -356,7 +363,32 @@ if 'result' in st.session_state:
                    'and have it shaded on the anomaly plots, set one in section 2 and run again.')
     show(plots.annual_totals(annual, RAIN, r['ref_means'][RAIN], 'Rain (mm)', s, selected),
          f'{prefix}_annual_rain')
-    show(plots.anomaly(annual, 'Rain anomaly (mm)', 'Rain anomaly (mm)', s, selected=selected),
+
+    # LOESS curve on the anomaly plots, set once for all of them
+    with st.expander('**LOESS curve on the anomaly plots**', expanded=True):
+        show_trend = st.checkbox('Show the LOESS curve', value=True)
+        col_span, col_fit, col_robust = st.columns([2, 1, 1])
+        span = col_span.slider('Span (years)', min_value=11, max_value=41, value=21, step=2,
+                               help='Years in each local fit. Shorter follows more of the year-to-year '
+                                    'noise, longer shows only the slowest changes. The tricube weights '
+                                    'make the curve about as smooth as a moving average half this long.')
+        degree = 2 if col_fit.radio('Local fit', ['Linear', 'Quadratic'],
+                                    help='Quadratic follows curvature better but can swing more at the '
+                                         'ends of the record.') == 'Quadratic' else 1
+        robust = col_robust.toggle('Robust to extremes', value=True,
+                                   help='On: years far from the curve are down-weighted, so a few extreme '
+                                        'years cannot pull it. Off: the curve follows the local mean, '
+                                        'extremes included.')
+        st.caption('LOESS (Cleveland 1979) is a smoother to show slow changes through time, not a trend '
+                   'test. It is fitted to the included water years. Within half a span of each end the '
+                   'fit can only see one side, so that part of the curve is dashed and is the least certain.')
+    trend = dict(span=span, degree=degree, robust=robust) if show_trend else None
+    if trend:
+        reason = smooth.why_not(included[WY].tolist(), span)
+        if reason:
+            st.caption(f'No LOESS curve: {reason}. Shorten the span or use a longer record.')
+
+    show(plots.anomaly(annual, 'Rain anomaly (mm)', 'Rain anomaly (mm)', s, selected=selected, trend=trend),
          f'{prefix}_rain_anomaly')
 
     st.subheader('Other annual anomalies')
@@ -370,7 +402,7 @@ if 'result' in st.session_state:
     }
     choice = st.selectbox('Variable', list(choices))
     column, up, down = choices[choice]
-    show(plots.anomaly(annual, column, column, s, up, down, selected), f'{prefix}_anomaly_{column.split(" anomaly")[0].replace(" ", "_")}')
+    show(plots.anomaly(annual, column, column, s, up, down, selected, trend), f'{prefix}_anomaly_{column.split(" anomaly")[0].replace(" ", "_")}')
 
     st.subheader('Rain residual mass')
     st.caption('Cumulative departure from the mean rain of the entire record.')

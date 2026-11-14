@@ -6,11 +6,13 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches
+import matplotlib.ticker
 import matplotlib.transforms as mtransforms
 import numpy as np
 
 from .metrics import WY, MONTHS, RESIDUAL, MONTHLY_RESIDUAL, day_of_water_year
 from .silo import RAIN, PET_FAO, PET_MWET
+from . import smooth
 
 YELLOW, ORANGE, RED, PURPLE, BLUE, GREEN, GREY = (
     '#FCB711', '#F37021', '#CC004C', '#6460AA', '#0089D0', '#0DB14B', '#808080')
@@ -164,7 +166,21 @@ def annual_totals(annual, column, ref_mean, ylabel, s, selected=None):
     return fig
 
 
-def anomaly(annual, column, ylabel, s, up=BLUE, down=RED, selected=None):
+def add_loess(ax, x, y, span, degree=1, robust=True):
+    # black LOESS curve, dashed within half a span of each end, where the fit is one-sided
+    x = np.asarray(x, dtype=float)
+    fit = smooth.loess(x, y, span, degree, robust)
+    inner = np.flatnonzero((x >= x.min() + span / 2) & (x <= x.max() - span / 2))
+    style = dict(color='k', lw=1.4, zorder=3)
+    # each dashed end includes the nearest solid point, so the parts join
+    for part in (slice(0, inner[0] + 1), slice(inner[-1], len(x))):
+        ax.plot(x[part], fit[part], ls=(0, (3, 2)), **style)
+    ax.plot(x[inner], fit[inner], label=f"LOESS, {span}-year span{', quadratic' if degree == 2 else ''}", **style)
+    return fit
+
+
+def anomaly(annual, column, ylabel, s, up=BLUE, down=RED, selected=None, trend=None):
+    # trend: None, or dict(span=, degree=, robust=) for a LOESS curve
     fig, ax = new_fig()
     a = annual.dropna(subset=[column])
     shade_reference(ax, s)
@@ -172,6 +188,8 @@ def anomaly(annual, column, ylabel, s, up=BLUE, down=RED, selected=None):
     row = a.loc[a[WY] == selected]
     if len(row):
         ax.bar(row[WY], row[column], color='k', width=0.8, label=str(selected))
+    if trend and smooth.why_not(a[WY].tolist(), trend['span']) is None:
+        add_loess(ax, a[WY], a[column], **trend)
     ax.axhline(0, color='k', lw=0.8)
     year_limits(ax, a[WY])
     ax.set_ylabel(ylabel)
@@ -248,7 +266,10 @@ def lift_temperature_axis(right, bar_tops, rain_top, low, high, gap=0.04):
     bar_frac = np.asarray(bar_tops) / rain_top + gap
     bottom = min(low.min(), np.min((np.asarray(low) - bar_frac * top) / (1 - bar_frac)))
     right.set_ylim(bottom, top)
-    ticks = right.yaxis.get_major_locator().tick_values(low.min(), top)
+    # tick count scaled to the share of the axis the temperatures use
+    share = (top - low.min()) / (top - bottom)
+    locator = matplotlib.ticker.MaxNLocator(nbins=max(3, int(round(9 * share))), steps=[1, 2, 2.5, 5, 10])
+    ticks = locator.tick_values(low.min(), top)
     step = ticks[1] - ticks[0]
     ticks = ticks[(ticks >= np.floor(low.min() / step) * step) & (ticks <= top)]
     right.set_yticks(ticks)
@@ -292,7 +313,7 @@ def climatology_temperature(annual, ranges, s):
                matplotlib.patches.Patch(color='0.6', alpha=0.4, lw=0),
                ax.patches[0],
                ax.errorbar([], [], yerr=[], fmt='none', ecolor=GREY, elinewidth=0.8, capsize=2)]
-    labels = [TMAX_SYM, TMIN_SYM, f'{T_SYM}, {RANGE_LABEL}', P_SYM, f'{P_SYM}, {RANGE_LABEL}']
+    labels = [TMAX_SYM, TMIN_SYM, f'{T_SYM}, p10 to p90', P_SYM, f'{P_SYM}, p10 to p90']
     ax.legend(handles, labels, loc='lower left', bbox_to_anchor=(0, 1), ncols=2, borderaxespad=0.2,
               handlelength=1.5, columnspacing=1.0)
 

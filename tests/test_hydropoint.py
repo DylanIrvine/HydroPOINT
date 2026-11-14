@@ -264,3 +264,30 @@ def test_observed_temperature_fill():
     out = workbook.output_names(r['daily'])
     assert 'Maximum temperature used, observed or SILO fill (degC)' in out
     assert 'Minimum temperature (degC)' in out
+
+
+def test_loess():
+    from hydropoint import smooth
+    x = np.arange(1950, 2020.0)
+    # linear and quadratic fits reproduce a line and a parabola exactly
+    assert np.allclose(smooth.loess(x, 2 * x - 5, 21, 1, True), 2 * x - 5)
+    assert np.allclose(smooth.loess(x, 0.3 * (x - 1980) ** 2, 21, 2, True), 0.3 * (x - 1980) ** 2)
+    # a single extreme year pulls the robust curve less
+    y = np.random.default_rng(0).normal(0, 50, len(x))
+    y[35] = 1000
+    assert abs(smooth.loess(x, y, 21, 1, True)[35]) < abs(smooth.loess(x, y, 21, 1, False)[35])
+    assert smooth.why_not(list(range(2000, 2010)), 21) is not None
+    assert smooth.why_not(list(range(1990, 2015)), 21) is not None
+    assert smooth.why_not(list(range(1980, 2025)), 21) is None
+
+
+def test_anomaly_with_loess():
+    import matplotlib.pyplot as plt
+    from hydropoint import plots
+    r = pipeline.run(fake_silo('1960-01-01', '2004-12-31'), dict(wy_start_month=9))
+    fig = plots.anomaly(r['annual'], 'Rain anomaly (mm)', 'Rain anomaly (mm)', r['settings'],
+                        trend=dict(span=21, degree=2, robust=True))
+    assert 'LOESS, 21-year span, quadratic' in fig.axes[0].get_legend_handles_labels()[1]
+    # solid middle plus two dashed ends
+    assert len(fig.axes[0].lines) == 4
+    plt.close('all')
