@@ -6,14 +6,19 @@ import pandas as pd
 
 from . import VERSION, gauge as gauge_mod, metrics
 from .metrics import MONTHS, WY
-from .silo import RAIN
+from .silo import RAIN, RH_TMAX, TMAX, TMIN
 
 
-def run(silo_daily, settings, gauge=None):
+def run(silo_daily, settings, gauge=None, tmax_obs=None, tmin_obs=None):
     s = dict(metrics.DEFAULTS, **settings)
     daily = silo_daily.copy()
     if gauge is not None:
         daily = gauge_mod.merge_gauge(daily, gauge, RAIN)
+        daily = gauge_mod.group_with(daily, RAIN, [gauge_mod.GAUGE, gauge_mod.SILO_RAIN, gauge_mod.SOURCE])
+    for kind, column, observed in [('Tmax', TMAX, tmax_obs), ('Tmin', TMIN, tmin_obs)]:
+        if observed is not None:
+            daily = gauge_mod.merge_temperature(daily, observed, kind, column)
+            daily = gauge_mod.group_with(daily, column, list(gauge_mod.TEMPERATURE[kind][1:]))
 
     daily, mean_daily_rain = metrics.add_daily(daily, s)
     monthly = metrics.make_monthly(daily, s)
@@ -23,7 +28,8 @@ def run(silo_daily, settings, gauge=None):
     s['_ref_years'] = [y for y in metrics.reference_years(annual[WY], s) if y in set(annual.loc[inc, WY])]
     return dict(daily=daily, monthly=monthly, annual=annual, settings=s, ref_means=ref_means,
                 wet_months=wet_months, mean_daily_rain=mean_daily_rain,
-                climatology=metrics.monthly_climatology(monthly, s))
+                climatology=metrics.monthly_climatology(monthly, s),
+                monthly_ranges=metrics.monthly_ranges(monthly, s))
 
 
 def settings_table(result, meta):
@@ -72,6 +78,27 @@ def settings_table(result, meta):
         ]
     else:
         rows.append(('Gauge file', 'None. All rain is from SILO'))
+    for kind, column in [('Tmax', TMAX), ('Tmin', TMIN)]:
+        source_col = gauge_mod.TEMPERATURE[kind][3]
+        name = meta.get(f'{kind.lower()}_name')
+        if name and source_col in daily:
+            source = daily[source_col].value_counts()
+            rows += [
+                (f'Observed {kind} file', name),
+                (f'Days of {kind} observed and quality controlled', int(source.get(gauge_mod.OBSERVED, 0))),
+                (f'Days of {kind} observed, not yet quality controlled', int(source.get(gauge_mod.NOT_QC, 0))),
+                (f'Days of {kind} filled from SILO', int(source.get(gauge_mod.SILO_FILL, 0))),
+            ]
+        else:
+            rows.append((f'Observed {kind} file', f'None. All {kind} is from SILO'))
+    if any(meta.get(k) for k in ('tmax_name', 'tmin_name')):
+        rows.append(('Observed temperature rule',
+                     'Observed values are used where they exist, including those BoM has not yet quality '
+                     'controlled (Quality N). Values over more than one day are treated as gaps and filled '
+                     'from SILO. SILO PET is not recalculated, so it still uses the SILO temperatures'))
+    if metrics.WET_BULB in daily:
+        blank = int((daily[metrics.WET_BULB].isna() & daily[RH_TMAX].notna() & daily[TMAX].notna()).sum())
+        rows.append(('Days with wet-bulb left blank (outside the Stull range)', blank))
     rows += [
         ('', ''),
         ('Definitions', ''),
@@ -87,6 +114,16 @@ def settings_table(result, meta):
         ('Wet season share', 'Share of the water year rain that fell in the wet season months. These are the six '
                              'consecutive months with the most rain on average over the reference period'),
         ('Anomaly', 'Value less the mean over the included water years of the reference period'),
+        ('Wet-bulb temperature at Tmax', 'Stull (2011) estimate from daily Tmax and the SILO relative humidity at '
+                                         'Tmax: Tw = T atan[0.151977 (RH + 8.313659)^0.5] + atan(T + RH) - '
+                                         'atan(RH - 1.676331) + 0.00391838 RH^1.5 atan(0.023101 RH) - 4.686035. '
+                                         'Fitted for sea level pressure, RH of 5 to 99% and T of -20 to 50 degC. '
+                                         'Days outside that range are left blank. SILO RH at Tmax uses the 9 am '
+                                         'vapour pressure, so it assumes the moisture at 9 am holds at the time '
+                                         'of Tmax. Where observed Tmax is used, the RH is rescaled to it: '
+                                         'RH x es(SILO Tmax) / es(Tmax used), with es from FAO56 equation 11, '
+                                         'capped at 100%. Monthly and annual values are the mean and maximum '
+                                         'of the daily values'),
         ('Included', 'Water years with fewer days than the minimum are flagged No. Their totals are still '
                      'listed, but indices, anomalies and the annual residual mass are left blank'),
     ]

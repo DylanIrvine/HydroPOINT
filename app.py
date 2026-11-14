@@ -43,8 +43,8 @@ st.markdown(
     'made. Annual values use a water year that starts in the month you choose. This is helpful for '
     'northern Australia, where the wet season spans two calendar years.\n\nThe start of the '
     'record can be padded by up to 20 years, which suits the warm-up needed for time series models '
-    'of groundwater levels such as Pastas (Collenteur et al., 2019). A rain gauge file can be added, '
-    'in which case the gauge rain is used where it exists and SILO fills the gaps.\n\n'
+    'of groundwater levels such as Pastas (Collenteur et al., 2019). Rain gauge and BoM temperature '
+    'files can be added, in which case the observed values are used where they exist and SILO fills the gaps.\n\n'
     'Note: HydroPOINT only works for locations in Australia.')
 
 if 'run_count' not in st.session_state:
@@ -170,9 +170,10 @@ tmax_threshold = col_e.number_input('Tmax above (degC)', value=35.0, step=0.5)
 tmax_spell_days = col_f.number_input('Hot spell: consecutive days with Tmax > threshold',
                                      value=3, min_value=1, step=1)
 
-# %% 4. gauge file (optional)
+# %% 4. observed rain and temperature (optional)
 
-st.header('4. Rain gauge file (optional)')
+st.header('4. Observed data (optional)')
+st.subheader('Rain gauge')
 st.caption('Leave this empty to use SILO rain only. With a gauge file, the rain column uses the '
            'gauge where it has a value and SILO elsewhere. The SILO rain and the source of each '
            'day are kept in their own columns.')
@@ -200,6 +201,35 @@ if gauge_file is not None:
     except Exception as error:
         gauge_daily = None
         st.error(f'Could not read the gauge file: {error}')
+
+st.subheader('Temperature')
+st.caption('Leave these empty to use SILO temperature only. Each file is a Bureau of Meteorology daily '
+           'download: maximum temperature (IDCJAC0010) or minimum temperature (IDCJAC0011). The '
+           'observed value is used where it exists and SILO fills the gaps. The observed values, the '
+           'SILO values and the source of each day are kept in their own columns. Values BoM has not '
+           'yet quality controlled are used, and flagged in the source column.')
+observed_temperature = {}
+col_tx, col_tn = st.columns(2)
+for kind, column, label in [('Tmax', col_tx, 'Maximum temperature file (IDCJAC0010)'),
+                            ('Tmin', col_tn, 'Minimum temperature file (IDCJAC0011)')]:
+    upload = column.file_uploader(label, type=['csv', 'txt'], key=f'upload_{kind}')
+    observed_temperature[kind] = (None, None)
+    if upload is None:
+        continue
+    try:
+        table = gauge.read_table(io.BytesIO(upload.getvalue()))
+        found = gauge.temperature_kind(table)
+        if found is None:
+            raise ValueError('not a BoM daily maximum or minimum temperature download')
+        if found != kind:
+            raise ValueError(f'this looks like a {found} file. Add it in the other box')
+        frame = gauge.bom_temperature_to_daily(table, kind)
+        observed_temperature[kind] = (frame, upload.name)
+        column.success(f"{kind}: {frame['Date'].min().date()} to {frame['Date'].max().date()}, "
+                       f"{len(frame):,} days with a value, {int((~frame['qc']).sum()):,} not yet "
+                       'quality controlled.')
+    except Exception as error:
+        column.error(f'Could not read the {kind} file: {error}')
 
 # %% 5. run
 
@@ -240,10 +270,12 @@ if st.button('Run', type='primary', disabled=bool(problems)):
             ref_mode='period' if ref_start is not None else 'entire',
             ref_start=ref_start, ref_end=ref_end)
         with st.spinner('Calculating and writing the workbook...'):
-            result = pipeline.run(st.session_state['raw'], settings, gauge_daily)
+            result = pipeline.run(st.session_state['raw'], settings, gauge_daily,
+                                  observed_temperature['Tmax'][0], observed_temperature['Tmin'][0])
             meta = dict(latitude=latitude, longitude=longitude, cell_lat=cell_lat, cell_lon=cell_lon,
                         start=start_date, pad_years=int(pad_years),
-                        gauge_name=gauge_file.name if gauge_daily is not None else None)
+                        gauge_name=gauge_file.name if gauge_daily is not None else None,
+                        tmax_name=observed_temperature['Tmax'][1], tmin_name=observed_temperature['Tmin'][1])
             table = pipeline.settings_table(result, meta)
             result['xlsx'] = workbook.build(result['daily'], result['monthly'], result['annual'], table)
             result['prefix'] = f'HydroPOINT_{cell_lat:.2f}_{cell_lon:.2f}'
@@ -287,6 +319,13 @@ if 'result' in st.session_state:
         counts = daily['Rain source'].value_counts()
         st.caption(f"Rain: {counts.get('Gauge', 0):,} days from the gauge, "
                    f"{counts.get('SILO', 0):,} days filled from SILO.")
+    for kind in ('Tmax', 'Tmin'):
+        source = gauge.TEMPERATURE[kind][3]
+        if source in daily:
+            counts = daily[source].value_counts()
+            st.caption(f"{kind}: {counts.get(gauge.OBSERVED, 0) + counts.get(gauge.NOT_QC, 0):,} days observed "
+                       f"({counts.get(gauge.NOT_QC, 0):,} not yet quality controlled), "
+                       f"{counts.get(gauge.SILO_FILL, 0):,} days filled from SILO.")
 
     st.download_button('Download the workbook (.xlsx)', r['xlsx'], file_name=f'{prefix}.xlsx',
                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -341,7 +380,24 @@ if 'result' in st.session_state:
     show(plots.residual_mass(daily, monthly, bars, curve), f'{prefix}_residual_mass')
 
     st.subheader('Monthly means')
-    show(plots.climatology(r['climatology']), f'{prefix}_monthly_means')
+    st.caption('Means over the complete months of the reference period. The grey bars show the 10th to '
+               '90th percentile of each month across those years. In months that are usually dry, a '
+               'few wet years can put the mean above the 90th percentile.')
+    show(plots.climatology(r['climatology'], r['monthly_ranges']), f'{prefix}_monthly_means')
+    if s['ref_mode'] == 'period':
+        st.caption('Box plots, right: water-year rain and mean Tmax and Tmin. Filled boxes are the included '
+                   'years of the reference period (Ref.), open boxes are all included years (All). '
+                   'Shading on the left panel shows the 10th to 90th percentile of the monthly mean temperature.')
+    else:
+        st.caption('Box plots, right: water-year rain and mean Tmax and Tmin for all included years. Set a '
+                   'reference period in section 2 to compare it with all years. Shading on the left panel '
+                   'shows the 10th to 90th percentile of the monthly mean temperature.')
+    show(plots.climatology_temperature(annual, r['monthly_ranges'], s), f'{prefix}_monthly_means_temperature')
+
+    st.subheader('Precipitation concentration index')
+    st.caption('PCI (Oliver 1980) for each included water year. 8.3 means the rain is spread evenly '
+               'over all 12 months, 100 means it all fell in one month.')
+    show(plots.pci_plot(annual, s, selected), f'{prefix}_pci')
 
     st.subheader('Excess water')
     pet_choice = st.selectbox('PET used for excess water', ['FAO56 PET', 'Morton wet-environment PET'])

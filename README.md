@@ -19,7 +19,7 @@ which averages SILO climate over a catchment.
    range of water years).
 3. Set the thresholds: rain day (mm), and the temperature and spell-length
    thresholds.
-4. Optionally add a daily rain gauge file.
+4. Optionally add a daily rain gauge file and BoM daily Tmax and Tmin files.
 5. Run, then download the workbook, single figures, or everything as a zip.
 
 Changing a threshold and pressing Run again does not download from SILO again.
@@ -65,6 +65,15 @@ Only a new grid cell or date range does.
   elsewhere, with the SILO rain and the source of each day kept in their own
   columns. A gauge total measured over more than one day is treated as a gap.
   All rainfall metrics use the merged Rain column.
+- **Temperature files.** Bureau of Meteorology daily maximum (IDCJAC0010) and
+  minimum (IDCJAC0011) temperature downloads. The observed value is used where
+  it exists, including values not yet quality controlled, and SILO fills the
+  gaps. The observed and SILO values and the source of each day are kept in
+  their own columns. SILO PET is not recalculated. Where observed Tmax is used,
+  the SILO RH at Tmax is rescaled to it before the wet-bulb temperature is
+  calculated.
+- **Wet-bulb temperature.** Stull (2011), from Tmax and RH at Tmax. Days
+  outside the range the equation was fitted for are left blank.
 
 ## Run locally
 

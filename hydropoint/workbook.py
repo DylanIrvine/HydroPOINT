@@ -4,6 +4,9 @@ import io
 
 import pandas as pd
 
+from . import gauge
+from .silo import RAIN, TMAX, TMIN
+
 
 def _write(writer, frame, sheet, date_columns=()):
     numeric = frame.select_dtypes('number').columns
@@ -18,7 +21,20 @@ def _write(writer, frame, sheet, date_columns=()):
         ws.set_column(i, i, width, date_format if column in date_columns else None)
 
 
+def output_names(daily):
+    # where a gauge or observed file was used, say so in the name of the column used in the calculations
+    names = {}
+    if gauge.SOURCE in daily:
+        names[RAIN] = 'Rain used, gauge or SILO fill (mm)'
+    if gauge.TEMPERATURE['Tmax'][3] in daily:
+        names[TMAX] = 'Maximum temperature used, observed or SILO fill (degC)'
+    if gauge.TEMPERATURE['Tmin'][3] in daily:
+        names[TMIN] = 'Minimum temperature used, observed or SILO fill (degC)'
+    return daily.rename(columns=names)
+
+
 def build(daily, monthly, annual, settings_table):
+    daily = output_names(daily)
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter', datetime_format='yyyy-mm-dd') as writer:
         _write(writer, daily, 'Daily', date_columns=('Date',))

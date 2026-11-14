@@ -209,3 +209,58 @@ def test_residual_mass_ignores_reference_period():
     assert a['Rain residual mass (mm)'].iloc[-1] == pytest.approx(0, abs=1e-6)
     # anomalies still use the reference period
     assert not np.allclose(whole['annual']['Rain anomaly (mm)'].dropna(), period['annual']['Rain anomaly (mm)'].dropna())
+
+
+def test_wet_bulb_stull():
+    # 13.70 degC is the check value given with NCL wetbulb_stull
+    tw = metrics.wet_bulb_stull([20.0, 20.0, 20.0, 60.0], [50.0, 3.0, 99.5, 50.0])
+    assert tw[0] == pytest.approx(13.70, abs=0.01)
+    assert np.isnan(tw[1:]).all()
+
+
+def test_wet_bulb_columns_and_new_plots():
+    import matplotlib.pyplot as plt
+    from hydropoint import plots
+    raw = fake_silo()
+    raw[silo.RH_TMAX] = 50.0
+    r = pipeline.run(raw, dict(wy_start_month=9, ref_mode='period', ref_start=2000, ref_end=2001))
+    assert metrics.WET_BULB in r['daily']
+    for table in ('monthly', 'annual'):
+        assert {'Mean wet-bulb at Tmax (degC)', 'Max wet-bulb at Tmax (degC)'} <= set(r[table])
+    ranges = r['monthly_ranges']
+    assert len(ranges) == 12 and (ranges['Rain p90'] >= ranges['Rain p10']).all()
+    plots.climatology(r['climatology'], ranges)
+    fig = plots.climatology_temperature(r['annual'], ranges, r['settings'])
+    assert [t.get_text() for t in fig.axes[1].get_xticklabels()] == ['Ref.', 'All']
+    plots.pci_plot(r['annual'], r['settings'], 2001)
+    plt.close('all')
+
+
+def test_observed_temperature_fill():
+    bom = ('Product code,Bureau of Meteorology station number,Year,Month,Day,'
+           'Maximum temperature (Degree C),Days of accumulation of maximum temperature,Quality\n'
+           'IDCJAC0010,015590,1999,01,01,40.0,1,Y\n'
+           'IDCJAC0010,015590,1999,01,02,,,\n'
+           'IDCJAC0010,015590,1999,01,03,41.0,2,Y\n'
+           'IDCJAC0010,015590,1999,01,04,39.0,1,N\n')
+    table = gauge.read_table(io.StringIO(bom))
+    assert gauge.temperature_kind(table) == 'Tmax' and not gauge.is_bom_format(table)
+    obs = gauge.bom_temperature_to_daily(table, 'Tmax')
+    raw = fake_silo()
+    raw[silo.RH_TMAX] = 50.0
+    r = pipeline.run(raw, dict(), tmax_obs=obs)
+    d = r['daily'].set_index('Date')
+    _, observed, silo_col, source = gauge.TEMPERATURE['Tmax']
+    assert d.loc['1999-01-01', silo.TMAX] == 40.0 and d.loc['1999-01-01', source] == gauge.OBSERVED
+    assert d.loc['1999-01-04', silo.TMAX] == 39.0 and d.loc['1999-01-04', source] == gauge.NOT_QC
+    # blanks and multi-day values fall back to SILO
+    for day in ('1999-01-02', '1999-01-03'):
+        assert d.loc[day, source] == gauge.SILO_FILL and d.loc[day, silo.TMAX] == d.loc[day, silo_col]
+    # RH is rescaled to the Tmax used, and unchanged where SILO Tmax is used
+    assert d.loc['1999-01-02', metrics.RH_ADJUSTED] == pytest.approx(50.0)
+    hotter = d.loc['1999-01-01', silo.TMAX] > d.loc['1999-01-01', silo_col]
+    assert (d.loc['1999-01-01', metrics.RH_ADJUSTED] < 50.0) == hotter
+    assert r['annual']['Days of observed Tmax'].sum() == 2
+    out = workbook.output_names(r['daily'])
+    assert 'Maximum temperature used, observed or SILO fill (degC)' in out
+    assert 'Minimum temperature (degC)' in out

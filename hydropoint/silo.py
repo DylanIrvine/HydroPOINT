@@ -22,6 +22,7 @@ PET_FAO = 'FAO56 PET (mm)'
 PET_MWET = 'Morton wet-environment areal PET (mm)'
 TMAX = 'Maximum temperature (degC)'
 TMIN = 'Minimum temperature (degC)'
+RH_TMAX = 'Relative humidity at Tmax (%)'
 
 # SILO 'alldata' variables: short name, output column, monthly and annual collation.
 # source (quality) columns are not kept
@@ -39,7 +40,7 @@ VARIABLES = [
     ('Mact', 'Morton actual evapotranspiration (mm)', 'sum'),
     ('Radn', 'Solar radiation (MJ/m2)', 'mean'),
     ('VP', 'Vapour pressure (hPa)', 'mean'),
-    ('RHmaxT', 'Relative humidity at Tmax (%)', 'mean'),
+    ('RHmaxT', RH_TMAX, 'mean'),
     ('RHminT', 'Relative humidity at Tmin (%)', 'mean'),
     ('MSLPres', 'Sea level pressure (hPa)', 'mean'),
     ('MSLP', 'Sea level pressure (hPa)', 'mean'),

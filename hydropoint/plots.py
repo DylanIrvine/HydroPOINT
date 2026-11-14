@@ -5,6 +5,7 @@ import calendar
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.patches
 import matplotlib.transforms as mtransforms
 import numpy as np
 
@@ -15,6 +16,17 @@ YELLOW, ORANGE, RED, PURPLE, BLUE, GREEN, GREY = (
     '#FCB711', '#F37021', '#CC004C', '#6460AA', '#0089D0', '#0DB14B', '#808080')
 HIGHLIGHT = [RED, BLUE, ORANGE, GREEN, PURPLE, YELLOW]
 WATERMARK = 'Dylan Irvine, Charles Darwin University'
+RANGE_LABEL = '10th to 90th percentile'
+P_SYM, T_SYM = '$P$', '$T$'
+TMAX_SYM, TMIN_SYM = r'$T_\mathrm{max}$', r'$T_\mathrm{min}$'
+
+# Oliver (1980) PCI classes: upper limit, label, colour
+PCI_CLASSES = [
+    (10, 'PCI \u2264 10: Uniform monthly precipitation distribution (low concentration)', GREEN),
+    (15, '10 < PCI \u2264 15: Moderate precipitation distribution', YELLOW),
+    (20, '15 < PCI \u2264 20: Irregular precipitation distribution', ORANGE),
+    (np.inf, 'PCI > 20: Strongly irregular precipitation distribution (high concentration in a few months)', RED),
+]
 
 plt.rcParams.update({
     'font.family': 'sans-serif',
@@ -27,6 +39,15 @@ plt.rcParams.update({
     'axes.spines.top': False,
     'axes.spines.right': False,
     'legend.frameon': False,
+    'xtick.direction': 'inout',
+    'ytick.direction': 'inout',
+    'xtick.major.size': 5,
+    'ytick.major.size': 5,
+    # symbols in the same sans-serif font as the text
+    'mathtext.fontset': 'custom',
+    'mathtext.rm': 'sans',
+    'mathtext.it': 'sans:italic',
+    'mathtext.cal': 'sans:italic',
 })
 
 
@@ -185,16 +206,139 @@ def residual_mass(daily, monthly, bars='Monthly', curve='Monthly'):
     return fig
 
 
-def climatology(clim):
+def range_bars(ax, x, low, high, **kwargs):
+    # error bars from low to high. Drawn about the midpoint, since a skewed
+    # month can have its mean outside the percentile range
+    ax.errorbar(x, (low + high) / 2, yerr=(high - low) / 2, fmt='none', ecolor=GREY,
+                elinewidth=0.8, capsize=2, capthick=0.8, **kwargs)
+
+
+def climatology(clim, ranges):
     fig, ax = new_fig()
     x = np.arange(12)
-    ax.bar(x, clim[RAIN], color=BLUE, width=0.7, label='Rain')
+    ax.bar(x, clim[RAIN], color=BLUE, width=0.7, label=P_SYM)
+    range_bars(ax, x, ranges['Rain p10'].to_numpy(), ranges['Rain p90'].to_numpy(), label=f'{P_SYM}, {RANGE_LABEL}')
     ax.plot(x, clim[PET_FAO], color=ORANGE, marker='o', ms=3, lw=1.2, label='FAO56 PET')
     ax.plot(x, clim[PET_MWET], color=RED, marker='s', ms=3, lw=1.2, label='Morton wet-environment PET')
     ax.set_xticks(x, [MONTHS[m - 1] for m in clim.index])
     ax.set_ylabel('Mean monthly total (mm)')
     ax.set_xlim(-0.5, 11.5)
-    legend_above(ax)
+    ax.set_ylim(bottom=0)
+    legend_above(ax, ncols=2)
+    return fig
+
+
+def boxes(ax, groups, colours, labels):
+    # reference boxes filled, all-year boxes open
+    bp = ax.boxplot(groups, widths=0.6, patch_artist=True, tick_labels=labels,
+                    medianprops=dict(color='k', lw=1), flierprops=dict(marker='o', ms=2, mew=0.5))
+    for i, (colour, label) in enumerate(zip(colours, labels)):
+        fill = matplotlib.colors.to_rgba(colour, 0.35) if label == 'Ref.' else 'white'
+        bp['boxes'][i].set(edgecolor=colour, facecolor=fill)
+        bp['fliers'][i].set_markeredgecolor(colour)
+        for line in bp['whiskers'][2 * i:2 * i + 2] + bp['caps'][2 * i:2 * i + 2]:
+            line.set_color(colour)
+    ax.tick_params(axis='x', labelsize=7)
+
+
+def lift_temperature_axis(right, bar_tops, rain_top, low, high, gap=0.04):
+    # set the temperature axis so that each month's lowest temperature sits above
+    # that month's rain bar, then drop the ticks below the temperatures plotted
+    top = high.max() + 0.05 * (high.max() - low.min())
+    bar_frac = np.asarray(bar_tops) / rain_top + gap
+    bottom = min(low.min(), np.min((np.asarray(low) - bar_frac * top) / (1 - bar_frac)))
+    right.set_ylim(bottom, top)
+    ticks = right.yaxis.get_major_locator().tick_values(low.min(), top)
+    step = ticks[1] - ticks[0]
+    ticks = ticks[(ticks >= np.floor(low.min() / step) * step) & (ticks <= top)]
+    right.set_yticks(ticks)
+    right.set_ylim(bottom, top)
+    right.spines['right'].set_bounds(ticks[0], top)
+
+
+def climatology_temperature(annual, ranges, s):
+    # left: mean monthly rain with Tmax and Tmin on a second axis.
+    # right: water-year rain, mean Tmax and mean Tmin as boxes
+    fig = plt.figure(figsize=(21 / 2.54, 9 / 2.54))
+    outer = fig.add_gridspec(1, 2, width_ratios=[2.2, 1], wspace=0.32)
+    ax = fig.add_subplot(outer[0, 0])
+    inner = outer[0, 1].subgridspec(1, 3, wspace=0.9)
+    ax_rain, ax_tmax, ax_tmin = (fig.add_subplot(inner[0, i]) for i in range(3))
+
+    x = np.arange(12)
+    ax.bar(x, ranges['Rain mean'], color=BLUE, width=0.7)
+    range_bars(ax, x, ranges['Rain p10'].to_numpy(), ranges['Rain p90'].to_numpy())
+    ax.set_xticks(x, [MONTHS[m - 1] for m in ranges.index])
+    ax.set_xlim(-0.5, 11.5)
+    rain_top = 1.05 * ranges['Rain p90'].max()
+    ax.set_ylim(0, rain_top)
+    ax.set_ylabel('Mean monthly rain (mm)')
+
+    right = ax.twinx()
+    right.spines['right'].set_visible(True)
+    for name, colour, marker in [('Tmax', RED, 'o'), ('Tmin', ORANGE, 's')]:
+        right.fill_between(x, ranges[f'{name} p10'], ranges[f'{name} p90'], color=colour, alpha=0.2, lw=0)
+        right.plot(x, ranges[f'{name} mean'], color=colour, marker=marker, ms=3, lw=1.2)
+    lift_temperature_axis(right, ranges['Rain mean'].to_numpy(), rain_top,
+                          ranges[['Tmax p10', 'Tmin p10']].min(axis=1).to_numpy(),
+                          ranges[['Tmax p90', 'Tmin p90']].max(axis=1).to_numpy())
+    right.set_ylabel('Mean monthly temperature (\u00b0C)')
+    # centre the label on the part of the axis with ticks
+    low_frac = (right.get_yticks()[0] - right.get_ylim()[0]) / np.diff(right.get_ylim())[0]
+    right.yaxis.label.set_y(0.5 * (1 + low_frac))
+
+    # legend columns: temperature, then rain
+    handles = [*right.lines[:2],
+               matplotlib.patches.Patch(color='0.6', alpha=0.4, lw=0),
+               ax.patches[0],
+               ax.errorbar([], [], yerr=[], fmt='none', ecolor=GREY, elinewidth=0.8, capsize=2)]
+    labels = [TMAX_SYM, TMIN_SYM, f'{T_SYM}, {RANGE_LABEL}', P_SYM, f'{P_SYM}, {RANGE_LABEL}']
+    ax.legend(handles, labels, loc='lower left', bbox_to_anchor=(0, 1), ncols=2, borderaxespad=0.2,
+              handlelength=1.5, columnspacing=1.0)
+
+    inc = annual.loc[annual['Included'] == 'Yes']
+    ref = inc.loc[inc[WY].isin(s['_ref_years'])]
+    # with the entire record as the reference, the two boxes would be the same
+    sets = [(ref, 'Ref.'), (inc, 'All')] if len(ref) < len(inc) else [(inc, 'All')]
+    # short titles rather than y labels, which collide in panels this narrow
+    for axis, column, colour, label in [
+            (ax_rain, RAIN, BLUE, f'{P_SYM} (mm)'),
+            (ax_tmax, 'Mean Tmax (degC)', RED, f'{TMAX_SYM} (\u00b0C)'),
+            (ax_tmin, 'Mean Tmin (degC)', ORANGE, f'{TMIN_SYM} (\u00b0C)')]:
+        boxes(axis, [d[column].dropna() for d, _ in sets], [colour] * len(sets), [n for _, n in sets])
+        axis.set_title(label, fontsize=9, pad=4)
+        axis.tick_params(axis='y', labelsize=7.5)
+    header = 'Annual totals and means' if s['wy_start_month'] == 1 else 'Water-year totals and means'
+    ax_tmax.annotate(header, xy=(0.5, 1), xycoords='axes fraction', xytext=(0, 20),
+                     textcoords='offset points', ha='center', va='bottom')
+    return fig
+
+
+def pci_plot(annual, s, selected=None):
+    # PCI for each included year over the Oliver (1980) classes.
+    # excluded years leave a break in the line
+    fig, ax = new_fig()
+    a = annual.loc[annual['Included'] == 'Yes'].dropna(subset=['PCI'])
+    top = max(24.0, 1.08 * a['PCI'].max())
+    low = 0
+    for upper, label, colour in PCI_CLASSES:
+        high = min(upper, top)
+        ax.axhspan(low, high, color=colour, alpha=0.15, lw=0, zorder=0)
+        ax.text(0.01, (low + high) / 2, label, color=colour, transform=ax.get_yaxis_transform(),
+                ha='left', va='center', fontsize=7, zorder=3,
+                bbox=dict(facecolor='white', alpha=0.85, lw=0, pad=1))
+        low = upper
+    line = a.set_index(WY)['PCI'].reindex(range(int(annual[WY].min()), int(annual[WY].max()) + 1))
+    ax.plot(line.index, line, color=BLUE, lw=1, marker='o', ms=3.5, zorder=2)
+    row = a.loc[a[WY] == selected]
+    if len(row):
+        ax.plot(row[WY], row['PCI'], color='k', marker='o', ms=5, ls='none', zorder=4, label=str(selected))
+    ax.set_ylim(0, top)
+    year_limits(ax, a[WY])
+    ax.set_ylabel('Precipitation concentration index')
+    ax.set_xlabel(wy_label(s['wy_start_month']))
+    if ax.get_legend_handles_labels()[0]:
+        legend_above(ax)
     return fig
 
 

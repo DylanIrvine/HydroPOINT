@@ -3,7 +3,8 @@
 import numpy as np
 import pandas as pd
 
-from .silo import RAIN, PET_FAO, PET_MWET, TMAX, TMIN, COLLATE, other_variables
+from .gauge import TEMPERATURE
+from .silo import RAIN, PET_FAO, PET_MWET, TMAX, TMIN, RH_TMAX, COLLATE, other_variables
 
 WY = 'Water year'
 EXCESS_FAO = 'Excess water FAO56 (mm)'
@@ -11,6 +12,13 @@ EXCESS_MWET = 'Excess water Morton (mm)'
 RAIN_WINDOWS = (3, 7, 14, 30)
 RESIDUAL = 'Rain residual mass (mm)'
 MONTHLY_RESIDUAL = 'Rain residual mass, all-month mean (mm)'
+WET_BULB = 'Wet-bulb temperature at Tmax, Stull (degC)'
+RH_ADJUSTED = 'Relative humidity at Tmax, adjusted to the Tmax used (%)'
+TMAX_SILO = TEMPERATURE['Tmax'][2]
+SOURCES = {kind: v[3] for kind, v in TEMPERATURE.items()}
+# Stull (2011) is fitted for these ranges, at sea level pressure
+STULL_RH = (5.0, 99.0)
+STULL_T = (-20.0, 50.0)
 MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 DEFAULTS = dict(
@@ -72,6 +80,23 @@ def seasonality_index(monthly_rain):
     return (monthly_rain - total / 12).abs().sum() / total if total > 0 else np.nan
 
 
+def saturation_vp(t):
+    # kPa, FAO56 equation 11
+    return 0.6108 * np.exp(17.27 * t / (t + 237.3))
+
+
+def wet_bulb_stull(t, rh):
+    # Stull (2011) wet-bulb temperature (degC) from air temperature (degC) and RH (%).
+    # blank outside the range the equation was fitted for
+    t = np.asarray(t, dtype=float)
+    rh = np.asarray(rh, dtype=float)
+    tw = (t * np.arctan(0.151977 * np.sqrt(rh + 8.313659))
+          + np.arctan(t + rh) - np.arctan(rh - 1.676331)
+          + 0.00391838 * rh ** 1.5 * np.arctan(0.023101 * rh) - 4.686035)
+    valid = (rh >= STULL_RH[0]) & (rh <= STULL_RH[1]) & (t >= STULL_T[0]) & (t <= STULL_T[1])
+    return np.where(valid, tw, np.nan)
+
+
 def reference_years(years, s):
     # water years that make up the reference period
     if s['ref_mode'] == 'period':
@@ -101,6 +126,14 @@ def add_daily(daily, s):
     out['Consecutive dry days'] = running_count(out['Rain day'] == 0)
     out[f"Consecutive days Tmin below {s['tmin_threshold']:g}"] = running_count(out[TMIN] < s['tmin_threshold'])
     out[f"Consecutive days Tmax above {s['tmax_threshold']:g}"] = running_count(out[TMAX] > s['tmax_threshold'])
+    if RH_TMAX in out:
+        rh = out[RH_TMAX]
+        if TMAX_SILO in out:
+            # SILO RH at Tmax is 9 am vapour pressure over saturation at SILO Tmax.
+            # rescale it to the Tmax used, so the wet-bulb matches that Tmax
+            rh = (out[RH_TMAX] * saturation_vp(out[TMAX_SILO]) / saturation_vp(out[TMAX])).clip(upper=100)
+            out[RH_ADJUSTED] = rh
+        out[WET_BULB] = wet_bulb_stull(out[TMAX], rh)
     return out, mean_rain
 
 
@@ -133,6 +166,12 @@ def make_monthly(daily, s):
         'Mean Tmax (degC)': g[TMAX].mean(),
         'Mean Tmin (degC)': g[TMIN].mean(),
     })
+    for name, source in SOURCES.items():
+        if source in daily:
+            out[f'Days of observed {name}'] = g[source].agg(lambda x: int((x != 'SILO').sum()))
+    if WET_BULB in daily:
+        out['Mean wet-bulb at Tmax (degC)'] = g[WET_BULB].mean()
+        out['Max wet-bulb at Tmax (degC)'] = g[WET_BULB].max()
     out = pd.concat([out, collate_others(g, daily)], axis=1).reset_index()
 
     first = pd.to_datetime(dict(year=out['Year'], month=out['Month'], day=1))
@@ -155,6 +194,19 @@ def monthly_climatology(monthly, s):
     clim = monthly.loc[ref].groupby('Month')[[RAIN, PET_FAO, PET_MWET]].mean()
     order = [(s['wy_start_month'] - 1 + i) % 12 + 1 for i in range(12)]
     return clim.reindex(order)
+
+
+def monthly_ranges(monthly, s, low=10, high=90):
+    # mean and percentiles across the reference years for each calendar month, in water-year order
+    ref = (monthly['Complete month'] == 'Yes') & monthly[WY].isin(reference_years(monthly[WY].unique(), s))
+    g = monthly.loc[ref].groupby('Month')
+    out = {}
+    for column, name in [(RAIN, 'Rain'), ('Mean Tmax (degC)', 'Tmax'), ('Mean Tmin (degC)', 'Tmin')]:
+        out[f'{name} mean'] = g[column].mean()
+        out[f'{name} p{low}'] = g[column].quantile(low / 100)
+        out[f'{name} p{high}'] = g[column].quantile(high / 100)
+    order = [(s['wy_start_month'] - 1 + i) % 12 + 1 for i in range(12)]
+    return pd.DataFrame(out).reindex(order)
 
 
 def wet_season_months(monthly, s):
@@ -217,6 +269,12 @@ def make_annual(daily, monthly, s):
             f"Max consecutive days Tmax above {s['tmax_threshold']:g}": hot_run,
             f"Tmax spells of {s['tmax_spell_days']}+ days": hot_spells,
         })
+        for name, source in SOURCES.items():
+            if source in d:
+                row[f'Days of observed {name}'] = int((d[source] != 'SILO').sum())
+        if WET_BULB in d:
+            row['Mean wet-bulb at Tmax (degC)'] = d[WET_BULB].mean()
+            row['Max wet-bulb at Tmax (degC)'] = d[WET_BULB].max()
         rows.append(row)
     out = pd.DataFrame(rows)
     others = collate_others(daily.groupby(WY), daily)
