@@ -61,15 +61,14 @@ with st.expander('**Privacy and data handling**'):
         '- The results exist only in the files you download.\n\n'
         '**What is sent to SILO**\n'
         '- To get the climate data, the app sends the Queensland Government SILO service the '
-        'coordinates of the grid cell, the date range, and your email address (SILO asks for an '
-        'email as the username). A gauge file is not sent.\n'
-        '- Your email is used for that request only. This app does not store or log it, and it is '
-        'not written to the workbook.\n\n'
+        'coordinates of the grid cell and the date range. SILO asks for an email as the username; '
+        'the app uses its own account for this, so you are not asked for yours. A gauge file is '
+        'not sent.\n\n'
         '**You**\n'
         '- No login, and no record kept by this app of who you are or where you are. The app does '
         'not log IP addresses or locations.\n'
         '- The only thing recorded is a single running total: the number of completed runs. It '
-        'has no link to any user, email, location or file.\n\n'
+        'has no link to any user, location or file.\n\n'
         '**What this does not cover**\n'
         '- Processing happens on the server that hosts the app, not on your computer. If you are '
         'using the public web version, your inputs travel to that host (which may be outside '
@@ -110,10 +109,6 @@ with st.expander('**How to cite and references**'):
 # %% 1. location and dates
 
 st.header('1. Location and dates')
-email = st.text_input('Your email (required by SILO)',
-                      help='SILO expects an email as the username. It is used only for the '
-                           'download request and is not stored or logged.')
-
 col_lat, col_lon = st.columns(2)
 latitude = col_lat.number_input('Latitude (decimal degrees, negative for south)', value=None,
                                 min_value=silo.LAT_RANGE[0], max_value=silo.LAT_RANGE[1],
@@ -246,8 +241,6 @@ st.header('5. Run')
 FIGURE_DPI = st.radio('Figure download resolution (dpi)', [300, 600], horizontal=True)
 
 problems = []
-if not email or '@' not in email:
-    problems.append('Enter a valid email.')
 if latitude is None or longitude is None:
     problems.append('Enter a latitude and a longitude.')
 if start_date > end_date:
@@ -268,7 +261,7 @@ if st.button('Run', type='primary', disabled=bool(problems)):
         if st.session_state.get('raw_key') != key:
             with st.spinner('Downloading from SILO...'):
                 st.session_state['raw'] = silo.download_silo_point(cell_lat, cell_lon,
-                                                                   start_str, end_str, email)
+                                                                   start_str, end_str)
                 st.session_state['raw_key'] = key
 
         settings = dict(

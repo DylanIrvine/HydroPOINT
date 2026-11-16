@@ -1,5 +1,6 @@
 # SILO Data Drill download for one grid cell
 
+import os
 import re
 import time
 import urllib.error
@@ -99,8 +100,15 @@ def parse_silo_alldata(data):
     return out.reset_index(drop=True)
 
 
-def download_silo_point(latitude, longitude, start, end, email, timeout=180, max_attempts=3):
-    # start and end are yyyymmdd strings. The email is the SILO username
+# SILO asks for an email as the username. The app uses its own account so users
+# do not have to give theirs. Set SILO_USERNAME to use another one (e.g. when
+# running your own copy)
+SILO_USERNAME = os.environ.get('SILO_USERNAME', 'dylan.irvine.apps@gmail.com')
+
+
+def download_silo_point(latitude, longitude, start, end, email=None, timeout=180, max_attempts=3):
+    # start and end are yyyymmdd strings. email is the SILO username (the app's own by default)
+    email = email or SILO_USERNAME
     parameters = {
         'format': 'alldata',
         'lat': f'{latitude:.2f}',

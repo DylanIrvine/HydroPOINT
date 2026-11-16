@@ -12,8 +12,8 @@ which averages SILO climate over a catchment.
 
 ## Using it
 
-1. Enter an email (SILO asks for one as the username), a latitude and longitude,
-   and a date range. Optionally pad the start by up to 20 years.
+1. Enter a latitude and longitude and a date range (no email needed: the app
+   uses its own SILO account). Optionally pad the start by up to 20 years.
 2. Choose the first month of the water year, the minimum number of days for a
    water year to be included, and the reference period (the entire record, or a
    range of water years).
@@ -106,9 +106,11 @@ HydroPOINT/
 
 - A gauge file is read into memory only. Results are held in memory for the
   session. Nothing is written to a database or permanent storage.
-- To get the climate, the app sends SILO the grid cell coordinates, the date
-  range and the user's email. The email is not stored, logged or written to the
-  workbook.
+- To get the climate, the app sends SILO the grid cell coordinates and the date
+  range. SILO asks for an email as the username; the app uses its own account
+  (dylan.irvine.apps@gmail.com), so users are not asked for theirs. To use
+  another account when running your own copy, set the `SILO_USERNAME`
+  environment variable.
 - The only thing recorded is a running total of completed runs, kept in an
   Upstash Redis database under the key `hydropoint_run_count`.
 
