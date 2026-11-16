@@ -100,6 +100,8 @@ with st.expander('**How to cite and references**'):
         'Methods:\n\n'
         'Allen, R.G., Pereira, L.S., Raes, D., and Smith, M. (1998). Crop evapotranspiration: '
         'guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56. FAO, Rome.\n\n'
+        'Morton, F.I. (1983). Operational estimates of areal evapotranspiration and their '
+        'significance to the science and practice of hydrology. Journal of Hydrology 66(1-4), 1-76.\n\n'
         'Cleveland, W.S. (1979). Robust locally weighted regression and smoothing scatterplots. '
         'Journal of the American Statistical Association 74(368), 829-836.\n\n'
         'Stull, R. (2011). Wet-bulb temperature from relative humidity and air temperature. '
@@ -412,26 +414,38 @@ if 'result' in st.session_state:
     show(plots.residual_mass(daily, monthly, bars, curve), f'{prefix}_residual_mass')
 
     st.subheader('Monthly means')
-    st.caption('Means over the complete months of the reference period. The grey bars show the 10th to '
-               '90th percentile of each month across those years. In months that are usually dry, a '
-               'few wet years can put the mean above the 90th percentile.')
+    st.caption('Means over the complete months of the reference period. The grey bars run from p10 to '
+               'p90, the 10th and 90th percentiles of each month across those years: one year in ten '
+               'is below p10 and one in ten above p90, so the bars span the middle 80 % of years. In '
+               'months that are usually dry, a few wet years can put the mean above p90.')
     show(plots.climatology(r['climatology'], r['monthly_ranges']), f'{prefix}_monthly_means')
-    if s['ref_mode'] == 'period':
-        st.caption('Box plots, right: water-year rain and mean Tmax and Tmin. Filled boxes are the included '
-                   'years of the reference period (Ref.), open boxes are all included years (All). '
-                   'Shading on the left panel shows the 10th to 90th percentile of the monthly mean temperature.')
-    else:
-        st.caption('Box plots, right: water-year rain and mean Tmax and Tmin for all included years. Set a '
-                   'reference period in section 2 to compare it with all years. Shading on the left panel '
-                   'shows the 10th to 90th percentile of the monthly mean temperature.')
+    st.caption('Left: mean monthly rain (bars) and mean monthly Tmax and Tmin (lines), over the '
+               'reference period. The grey bars on the rain and the shading on the temperatures run '
+               'from p10 to p90 (10th to 90th percentile), the range of the middle 80 % of years. '
+               'Right: box plots of water-year rain and of mean Tmax and Tmin for all included years '
+               '(the whole record, not the reference period; the years are given under the middle '
+               'panel). Each box spans the 25th to 75th percentile with the median as the line; the '
+               'whiskers reach the furthest year within 1.5 times the box height of the box, and years '
+               'beyond that are shown as points.')
     show(plots.climatology_temperature(annual, r['monthly_ranges'], s), f'{prefix}_monthly_means_temperature')
 
     st.subheader('Precipitation concentration index')
-    st.caption('PCI (Oliver 1980) for each included water year. 8.3 means the rain is spread evenly '
-               'over all 12 months, 100 means it all fell in one month.')
+    st.caption('PCI (Oliver 1980) for each included water year: 100 times the sum of the squared monthly '
+               'rain totals over the square of the annual total. 8.3 means the rain is spread evenly '
+               'over all 12 months, 100 means it all fell in one month. The shaded classes follow '
+               'Oliver (1980): PCI \u2264 10, uniform monthly distribution (low concentration); '
+               '10 < PCI \u2264 15, moderate; 15 < PCI \u2264 20, irregular; PCI > 20, strongly irregular '
+               '(rain concentrated in a few months).')
     show(plots.pci_plot(annual, s, selected), f'{prefix}_pci')
 
     st.subheader('Excess water')
+    st.caption('Excess water is calculated for each day as P \u2212 PET (daily rain less daily potential '
+               'evapotranspiration), set to zero on days when PET is larger than P, and the daily values '
+               'are then summed over each water year. Two PET series from SILO can be used (choose '
+               'below): FAO56 short-crop reference evapotranspiration (Allen et al. 1998), or Morton\'s '
+               'wet-environment areal PET (Morton 1983). Because dry days cannot cancel out wet ones, '
+               'the annual excess is larger than annual P less annual PET, and can be well above zero '
+               'in years when annual PET exceeds annual P.')
     pet_choice = st.selectbox('PET used for excess water', ['FAO56 PET', 'Morton wet-environment PET'])
     excess_column = EXCESS_FAO if pet_choice == 'FAO56 PET' else EXCESS_MWET
     show(plots.excess_water(annual, s, excess_column, pet_choice), f'{prefix}_excess_water')

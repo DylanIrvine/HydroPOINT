@@ -18,16 +18,16 @@ YELLOW, ORANGE, RED, PURPLE, BLUE, GREEN, GREY = (
     '#FCB711', '#F37021', '#CC004C', '#6460AA', '#0089D0', '#0DB14B', '#808080')
 HIGHLIGHT = [RED, BLUE, ORANGE, GREEN, PURPLE, YELLOW]
 WATERMARK = 'Dylan Irvine, Charles Darwin University'
-RANGE_LABEL = '10th to 90th percentile'
+RANGE_LABEL = r'$p_{10}$ to $p_{90}$'
 P_SYM, T_SYM = '$P$', '$T$'
 TMAX_SYM, TMIN_SYM = r'$T_\mathrm{max}$', r'$T_\mathrm{min}$'
 
 # Oliver (1980) PCI classes: upper limit, label, colour
 PCI_CLASSES = [
-    (10, 'PCI \u2264 10: Uniform monthly precipitation distribution (low concentration)', GREEN),
-    (15, '10 < PCI \u2264 15: Moderate precipitation distribution', YELLOW),
-    (20, '15 < PCI \u2264 20: Irregular precipitation distribution', ORANGE),
-    (np.inf, 'PCI > 20: Strongly irregular precipitation distribution (high concentration in a few months)', RED),
+    (10, 'PCI \u2264 10', GREEN),
+    (15, '10 < PCI \u2264 15', YELLOW),
+    (20, '15 < PCI \u2264 20', ORANGE),
+    (np.inf, 'PCI > 20', RED),
 ]
 
 plt.rcParams.update({
@@ -247,12 +247,11 @@ def climatology(clim, ranges):
 
 
 def boxes(ax, groups, colours, labels):
-    # reference boxes filled, all-year boxes open
+    # light fill in the line colour
     bp = ax.boxplot(groups, widths=0.6, patch_artist=True, tick_labels=labels,
                     medianprops=dict(color='k', lw=1), flierprops=dict(marker='o', ms=2, mew=0.5))
-    for i, (colour, label) in enumerate(zip(colours, labels)):
-        fill = matplotlib.colors.to_rgba(colour, 0.35) if label == 'Ref.' else 'white'
-        bp['boxes'][i].set(edgecolor=colour, facecolor=fill)
+    for i, colour in enumerate(colours):
+        bp['boxes'][i].set(edgecolor=colour, facecolor=matplotlib.colors.to_rgba(colour, 0.35))
         bp['fliers'][i].set_markeredgecolor(colour)
         for line in bp['whiskers'][2 * i:2 * i + 2] + bp['caps'][2 * i:2 * i + 2]:
             line.set_color(colour)
@@ -313,22 +312,24 @@ def climatology_temperature(annual, ranges, s):
                matplotlib.patches.Patch(color='0.6', alpha=0.4, lw=0),
                ax.patches[0],
                ax.errorbar([], [], yerr=[], fmt='none', ecolor=GREY, elinewidth=0.8, capsize=2)]
-    labels = [TMAX_SYM, TMIN_SYM, f'{T_SYM}, p10 to p90', P_SYM, f'{P_SYM}, p10 to p90']
+    labels = [TMAX_SYM, TMIN_SYM, f'{T_SYM}, {RANGE_LABEL}', P_SYM, f'{P_SYM}, {RANGE_LABEL}']
     ax.legend(handles, labels, loc='lower left', bbox_to_anchor=(0, 1), ncols=2, borderaxespad=0.2,
               handlelength=1.5, columnspacing=1.0)
 
+    # every included year (the whole record, not the reference period)
     inc = annual.loc[annual['Included'] == 'Yes']
-    ref = inc.loc[inc[WY].isin(s['_ref_years'])]
-    # with the entire record as the reference, the two boxes would be the same
-    sets = [(ref, 'Ref.'), (inc, 'All')] if len(ref) < len(inc) else [(inc, 'All')]
-    # short titles rather than y labels, which collide in panels this narrow
+    # short titles rather than y labels, which collide in panels this narrow.
+    # no x tick labels; the middle panel carries the span of years
     for axis, column, colour, label in [
             (ax_rain, RAIN, BLUE, f'{P_SYM} (mm)'),
             (ax_tmax, 'Mean Tmax (degC)', RED, f'{TMAX_SYM} (\u00b0C)'),
             (ax_tmin, 'Mean Tmin (degC)', ORANGE, f'{TMIN_SYM} (\u00b0C)')]:
-        boxes(axis, [d[column].dropna() for d, _ in sets], [colour] * len(sets), [n for _, n in sets])
+        boxes(axis, [inc[column].dropna()], [colour], [''])
         axis.set_title(label, fontsize=9, pad=4)
         axis.tick_params(axis='y', labelsize=7.5)
+        axis.tick_params(axis='x', bottom=False)
+    if len(inc):
+        ax_tmax.set_xlabel(f'{int(inc[WY].min())}\u2013{int(inc[WY].max())}', fontsize=8)
     header = 'Annual totals and means' if s['wy_start_month'] == 1 else 'Water-year totals and means'
     ax_tmax.annotate(header, xy=(0.5, 1), xycoords='axes fraction', xytext=(0, 20),
                      textcoords='offset points', ha='center', va='bottom')

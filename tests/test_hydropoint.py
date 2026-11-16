@@ -231,7 +231,11 @@ def test_wet_bulb_columns_and_new_plots():
     assert len(ranges) == 12 and (ranges['Rain p90'] >= ranges['Rain p10']).all()
     plots.climatology(r['climatology'], ranges)
     fig = plots.climatology_temperature(r['annual'], ranges, r['settings'])
-    assert [t.get_text() for t in fig.axes[1].get_xticklabels()] == ['Ref.', 'All']
+    # one box per panel, all included years, filled
+    assert [t.get_text() for t in fig.axes[1].get_xticklabels()] == ['']
+    years = r['annual'].loc[r['annual']['Included'] == 'Yes', metrics.WY]
+    assert fig.axes[2].get_xlabel() == f'{years.min()}\u2013{years.max()}'
+    assert fig.axes[1].patches[0].get_facecolor()[3] == pytest.approx(0.35)
     plots.pci_plot(r['annual'], r['settings'], 2001)
     plt.close('all')
 
