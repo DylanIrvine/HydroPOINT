@@ -21,8 +21,8 @@ APP_NAME = 'HydroPOINT'
 # app address, used in the citation
 APP_URL = 'https://hydropoint.streamlit.app/'
 
-LOGO = 'logo/hydrocpoint_badge.png'
-FAVICON = 'logo/hydropoint_favicon.png'
+LOGO = 'logo/HydroPOINT_logo.png'
+FAVICON = 'logo/HydroPOINT_icon.png'
 
 st.set_page_config(page_title=APP_NAME, page_icon=FAVICON)
 

@@ -96,7 +96,7 @@ HydroPOINT/
     workbook.py             xlsx writer
     run_counter.py          shared run total (Upstash Redis over REST)
   tests/                    pytest suite (no network needed)
-  logo/                     header logo and browser-tab icon
+  logo/                     header logo, browser-tab icon and svg source
   requirements.txt
   .streamlit/config.toml    dark theme
   LICENSE
