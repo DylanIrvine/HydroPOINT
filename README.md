@@ -145,7 +145,7 @@ data. Environmental Modelling and Software 16(4), 309-330.
 
 ## Licence
 
-MIT. See `LICENSE`.
+Copyright (c) 2026 Charles Darwin University. All rights reserved. See `LICENSE`.
 
 ## Credits
 

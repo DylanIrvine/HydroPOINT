@@ -74,8 +74,8 @@ with st.expander('**Privacy and data handling**'):
         'using the public web version, your inputs travel to that host (which may be outside '
         'Australia). The hosting provider and the Streamlit framework may use their own cookies '
         'and keep their own server logs, under their own privacy policies.\n'
-        '- If your data are confidential or subject to a data agreement, run the app on your own '
-        'machine. The code is open source (MIT).')
+        '- If your data are confidential or subject to a data agreement, contact the author about '
+        'running the app on your own machine.')
 
 with st.expander('**How to cite and references**'):
     st.write(

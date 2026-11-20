@@ -8,7 +8,10 @@ import matplotlib.pyplot as plt
 import matplotlib.patches
 import matplotlib.ticker
 import matplotlib.transforms as mtransforms
+import matplotlib.image as mimage
+from matplotlib.offsetbox import AnnotationBbox, HPacker, OffsetImage, TextArea
 import numpy as np
+from pathlib import Path
 
 from .metrics import WY, MONTHS, RESIDUAL, MONTHLY_RESIDUAL, day_of_water_year
 from .silo import RAIN, PET_FAO, PET_MWET
@@ -18,6 +21,7 @@ YELLOW, ORANGE, RED, PURPLE, BLUE, GREEN, GREY = (
     '#FCB711', '#F37021', '#CC004C', '#6460AA', '#0089D0', '#0DB14B', '#808080')
 HIGHLIGHT = [RED, BLUE, ORANGE, GREEN, PURPLE, YELLOW]
 WATERMARK = 'Dylan Irvine, Charles Darwin University'
+BADGE_ICON = Path(__file__).resolve().parents[1] / 'logo' / 'HydroPOINT_badge.png'
 RANGE_LABEL = r'$p_{10}$ to $p_{90}$'
 P_SYM, T_SYM = '$P$', '$T$'
 TMAX_SYM, TMIN_SYM = r'$T_\mathrm{max}$', r'$T_\mathrm{min}$'
@@ -58,14 +62,31 @@ def new_fig(width_cm=16, height_cm=9, rows=1):
     return fig, axes
 
 
+BADGE_PT = 14       # height of the app icon in the 'Made using' badge, in points
+
+
+def add_badge(fig, x, y, transform):
+    # 'Made using HydroPOINT' with the app icon, right-aligned at (x, y). Skipped if the icon is missing
+    try:
+        img = mimage.imread(BADGE_ICON)
+    except (FileNotFoundError, OSError):
+        return
+    packed = HPacker(children=[TextArea('Made using HydroPOINT', textprops=dict(fontsize=6, color='0.5')),
+                               OffsetImage(img, zoom=BADGE_PT / img.shape[0])],
+                     align='center', pad=0, sep=3)
+    fig.add_artist(AnnotationBbox(packed, (x, y), xycoords=transform, box_alignment=(1, 0.5),
+                                  frameon=False, pad=0, annotation_clip=False))
+
 def add_watermark(fig):
-    # credit line below the plot, bottom left
+    # credit line bottom left and the 'Made using' badge bottom right, in a strip below the
+    # plot so both can be cropped off
     fig.canvas.draw()
     box = fig.get_tightbbox(fig.canvas.get_renderer())
     width, height = fig.get_size_inches()
-    below = fig.transFigure + mtransforms.ScaledTranslation(0, -5 / 72, fig.dpi_scale_trans)
+    below = fig.transFigure + mtransforms.ScaledTranslation(0, -(BADGE_PT / 2 + 4) / 72, fig.dpi_scale_trans)
     fig.text(box.x0 / width, box.y0 / height, WATERMARK, transform=below,
-             ha='left', va='top', fontsize=6, color='0.5')
+             ha='left', va='center', fontsize=6, color='0.5')
+    add_badge(fig, box.x1 / width, box.y0 / height, below)
 
 
 def wy_label(start_month):
